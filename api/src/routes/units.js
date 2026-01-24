@@ -11,6 +11,7 @@ import {
 } from "../middleware/centralizedErrorHandler.js";
 import logger from "../utils/logger.js";
 import { successResponse, errorResponse } from "../utils/responses.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const unitRouter = Router();
 
@@ -176,6 +177,15 @@ unitRouter.post(
       if (!parsed.success) return res.status(400).json(parsed.error.flatten());
 
       const created = await prisma.unit.create({ data: parsed.data });
+
+      await auditLog(req, {
+        action: "CREATE",
+        entityType: "Unit",
+        entityId: created.id,
+        entityName: created.unitNumber,
+        description: `New unit ${created.unitNumber} added to property ID: ${created.propertyId}`
+      });
+
       return successResponse(res, created, "Unit created", 201);
     } catch (error) {
       logger.error("Error creating unit:", error);
@@ -258,6 +268,14 @@ unitRouter.put(
         data: parsed.data,
       });
 
+      await auditLog(req, {
+        action: "UPDATE",
+        entityType: "Unit",
+        entityId: updated.id,
+        entityName: updated.unitNumber,
+        description: `Unit ${updated.unitNumber} details updated`
+      });
+
       return successResponse(res, updated, "Unit updated");
     } catch (error) {
       logger.error("Error updating unit:", error);
@@ -291,6 +309,14 @@ unitRouter.put(
         data: { status: parsed.data.status },
       });
 
+      await auditLog(req, {
+        action: "STATUS_CHANGE",
+        entityType: "Unit",
+        entityId: updated.id,
+        entityName: updated.unitNumber,
+        description: `Unit ${updated.unitNumber} status changed to ${parsed.data.status}`
+      });
+
       return successResponse(res, updated, "Unit status updated");
     } catch (error) {
       logger.error("Error updating unit status:", error);
@@ -313,6 +339,15 @@ unitRouter.delete(
       if (!existing) return res.status(404).json({ error: "Unit not found" });
 
       await prisma.unit.delete({ where: { id: existing.id } });
+
+      await auditLog(req, {
+        action: "DELETE",
+        entityType: "Unit",
+        entityId: existing.id,
+        entityName: existing.unitNumber,
+        description: `Unit ${existing.unitNumber} deleted from system`
+      });
+
       return successResponse(res, null, "Unit deleted", 204);
     } catch (error) {
       logger.error("Error deleting unit:", error);

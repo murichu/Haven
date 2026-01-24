@@ -3,6 +3,7 @@ import { prisma } from "../db.js";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { requireAgentAuth, requireSameAgency } from "../middleware/agentAuth.js";
+import { auditLog } from "../utils/auditLogger.js";
 import {
     sendMessage,
     sendBulkMessage,
@@ -138,6 +139,13 @@ messagingRouter.post("/send", requireAuth, requireSameAgency, async (req, res) =
             templateId,
             properties: properties || [],
             leases: leases || [],
+        });
+
+        await auditLog(req, {
+          action: "CREATE",
+          entityType: "Message",
+          entityId: result.messageId,
+          description: `Direct message sent to ${recipientIds.length} recipients`
         });
 
         res.status(201).json({

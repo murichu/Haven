@@ -1,545 +1,300 @@
-import { useEffect, useState } from "react";
-import {
-  Plus,
-  Search,
-  MapPin,
-  Edit,
-  Trash2,
-  X,
-  Filter,
-  SlidersHorizontal,
-  Grid,
-  List,
-} from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import PropertyGrid from "@/components/PropertyGrid";
-import PropertyCard from "@/components/PropertyCard";
-import { PropertyFormModal } from "@/components/ui/form-modal";
-import axios from "axios";
+import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { Building2, MapPin, Bed, Bath, Square, Plus, X, Loader2, Trash2, Edit2 } from 'lucide-react';
+import { useToast } from '../components/ui/Toast';
+import StatusBadge from '../components/shared/StatusBadge';
 
 const Properties = () => {
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [viewMode, setViewMode] = useState("grid");
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState("asc");
-  const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [showFilters, setShowFilters] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [editingProperty, setEditingProperty] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [submitLoading, setSubmitLoading] = useState(false);
-
-  useEffect(() => {
-    fetchProperties();
-  }, []);
-
-  const fetchProperties = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get("/properties", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Handle nested response structure: response.data.data.properties
-      let propertiesData = [];
-      if (response.data) {
-        // Check if data is nested (response.data.data.properties)
-        if (response.data.data && response.data.data.properties) {
-          propertiesData = response.data.data.properties;
-        }
-        // Check if properties is at top level (response.data.properties)
-        else if (response.data.properties) {
-          propertiesData = response.data.properties;
-        }
-        // Check if data is direct array (response.data.data)
-        else if (Array.isArray(response.data.data)) {
-          propertiesData = response.data.data;
-        }
-        // Check if data is direct array (response.data)
-        else if (Array.isArray(response.data)) {
-          propertiesData = response.data;
-        }
-      }
-
-      setProperties(Array.isArray(propertiesData) ? propertiesData : []);
-    } catch (error) {
-      console.error("Error fetching properties:", error);
-      setProperties([]);
-      setError("Failed to load properties");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOpenModal = (property = null) => {
-    setEditingProperty(property);
-    setError("");
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingProperty(null);
-    setError("");
-  };
-
-  const handleSubmit = async (formData) => {
-    setError("");
-    setSubmitLoading(true);
-
-    try {
-      const token = localStorage.getItem("token");
-      const payload = {
-        ...formData,
-        totalUnits: formData.totalUnits
-          ? parseInt(formData.totalUnits)
-          : undefined,
-      };
-
-      if (editingProperty) {
-        await axios.put(`/properties/${editingProperty.id}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setSuccess("Property updated successfully");
-      } else {
-        await axios.post("/properties", payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setSuccess("Property created successfully");
-      }
-
-      handleCloseModal();
-      fetchProperties();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error saving property:", error);
-      setError(error.response?.data?.error || "Failed to save property");
-      throw error; // Re-throw to let the modal handle it
-    } finally {
-      setSubmitLoading(false);
-    }
-  };
-
-  const handleDelete = async (property) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${property.name}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/properties/${property.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSuccess("Property deleted successfully");
-      fetchProperties();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error deleting property:", error);
-      setError(error.response?.data?.error || "Failed to delete property");
-      setTimeout(() => setError(""), 3000);
-    }
-  };
-
-  // Transform properties data to match PropertyCard expectations
-  const transformedProperties = properties.map((property) => ({
-    ...property,
-    location: property.location || property.address,
-    price: property.rent || property.price,
-    currency: "KSh",
-    images: property.images || [],
-    amenities: property.amenities || [],
-    bedrooms: property.bedrooms,
-    bathrooms: property.bathrooms,
-    area: property.area,
-    rating: property.rating,
-    featured: property.featured || false,
-    isFavorited: property.isFavorited || false,
-  }));
-
-  // Filter and sort properties
-  const filteredAndSortedProperties = transformedProperties
-    .filter((property) => {
-      const matchesSearch =
-        property.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property.address?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesType =
-        filterType === "all" ||
-        property.type?.toLowerCase() === filterType.toLowerCase();
-      const matchesStatus =
-        filterStatus === "all" ||
-        property.status?.toLowerCase() === filterStatus.toLowerCase();
-
-      return matchesSearch && matchesType && matchesStatus;
-    })
-    .sort((a, b) => {
-      let aValue = a[sortBy];
-      let bValue = b[sortBy];
-
-      // Handle different data types
-      if (sortBy === "price" || sortBy === "rent") {
-        aValue = parseFloat(aValue) || 0;
-        bValue = parseFloat(bValue) || 0;
-      } else if (typeof aValue === "string") {
-        aValue = aValue.toLowerCase();
-        bValue = bValue?.toLowerCase() || "";
-      }
-
-      if (sortOrder === "asc") {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
+    const [properties, setProperties] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingProperty, setEditingProperty] = useState(null);
+    const { showToast } = useToast();
+    const [formData, setFormData] = useState({
+        title: '',
+        address: '',
+        city: '',
+        state: '',
+        rentAmount: '',
+        type: 'APARTMENT',
+        status: 'AVAILABLE'
     });
 
-  const handlePropertySelect = (propertyId) => {
-    console.log("Selected property:", propertyId);
-    // Navigate to property details or open modal
-  };
+    useEffect(() => {
+        fetchProperties();
+    }, []);
 
-  const handlePropertyFavorite = (propertyId, isFavorited) => {
-    console.log("Favorite toggled:", propertyId, isFavorited);
-    // Update property favorite status
-    setProperties((prev) =>
-      prev.map((prop) =>
-        prop.id === propertyId ? { ...prop, isFavorited } : prop
-      )
-    );
-  };
+    const fetchProperties = async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/properties');
+            const payload = response.data.data;
+            const propertiesArray = Array.isArray(payload) ? payload : (payload?.properties || []);
+            setProperties(propertiesArray);
+        } catch (err) {
+            console.error(err);
+            setError('Failed to load properties');
+            showToast('Error loading properties', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "occupied":
-        return "default";
-      case "vacant":
-        return "secondary";
-      case "maintenance":
-        return "destructive";
-      default:
-        return "outline";
-    }
-  };
+    const handleOpenModal = (property = null) => {
+        if (property) {
+            setEditingProperty(property);
+            setFormData({
+                title: property.title,
+                address: property.address,
+                city: property.city || '',
+                state: property.state || '',
+                rentAmount: property.rentAmount || '',
+                type: property.type,
+                status: property.status
+            });
+        } else {
+            setEditingProperty(null);
+            setFormData({
+                title: '',
+                address: '',
+                city: '',
+                state: '',
+                rentAmount: '',
+                type: 'APARTMENT',
+                status: 'AVAILABLE'
+            });
+        }
+        setIsModalOpen(true);
+    };
 
-  if (loading) {
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            if (editingProperty) {
+                await api.put(`/properties/${editingProperty.id}`, formData);
+                showToast('Property updated successfully', 'success');
+            } else {
+                await api.post('/properties', formData);
+                showToast('Property added successfully', 'success');
+            }
+            setIsModalOpen(false);
+            fetchProperties();
+        } catch (err) {
+            console.error(err);
+            showToast(err.response?.data?.error || 'Failed to save property', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this property?')) return;
+        try {
+            await api.delete(`/properties/${id}`);
+            showToast('Property deleted successfully', 'success');
+            fetchProperties();
+        } catch (err) {
+            showToast('Failed to delete property', 'error');
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading properties...</div>;
+
     return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="text-muted-foreground">Loading properties...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      {/* Success Message */}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-          {success}
-        </div>
-      )}
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* Header Section */}
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-            Properties
-          </h1>
-          <p className="text-lg text-gray-600">
-            Manage your property portfolio with modern tools
-          </p>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span>{filteredAndSortedProperties.length} properties</span>
-            <span>•</span>
-            <span>Updated {new Date().toLocaleDateString()}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-          </Button>
-          <Button
-            onClick={() => handleOpenModal()}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Property
-          </Button>
-        </div>
-      </div>
-
-      {/* Search and Controls */}
-      <div className="space-y-4">
-        {/* Search Bar */}
-        <div className="relative max-w-2xl">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search properties by name, location, or address..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12 text-base border-gray-300 focus:border-primary-500 focus:ring-primary-500"
-          />
-        </div>
-
-        {/* Filters Panel */}
-        {showFilters && (
-          <Card className="p-6 border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Property Type
-                </label>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-4xl font-black text-gray-900 tracking-tight">Properties</h1>
+                    <p className="text-gray-500 font-medium">Manage your real estate assets and multi-unit complexes</p>
+                </div>
+                <button 
+                  onClick={() => handleOpenModal()}
+                  className="bg-primary text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all flex items-center gap-2"
                 >
-                  <option value="all">All Types</option>
-                  <option value="apartment">Apartment</option>
-                  <option value="house">House</option>
-                  <option value="commercial">Commercial</option>
-                  <option value="office">Office</option>
-                  <option value="warehouse">Warehouse</option>
-                  <option value="land">Land</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="all">All Status</option>
-                  <option value="available">Available</option>
-                  <option value="occupied">Occupied</option>
-                  <option value="maintenance">Maintenance</option>
-                  <option value="unavailable">Unavailable</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sort By
-                </label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="name">Name</option>
-                  <option value="price">Price</option>
-                  <option value="type">Type</option>
-                  <option value="location">Location</option>
-                  <option value="createdAt">Date Added</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Order
-                </label>
-                <select
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="asc">Ascending</option>
-                  <option value="desc">Descending</option>
-                </select>
-              </div>
+                    <Plus size={20} strokeWidth={3} />
+                    Add Property
+                </button>
             </div>
 
-            {/* Active Filters */}
-            {(filterType !== "all" || filterStatus !== "all" || searchTerm) && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-gray-700">
-                    Active filters:
-                  </span>
-                  {searchTerm && (
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      Search: "{searchTerm}&quot;
-                      <button
-                        onClick={() => setSearchTerm("")}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  )}
-                  {filterType !== "all" && (
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      Type: {filterType}
-                      <button
-                        onClick={() => setFilterType("all")}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  )}
-                  {filterStatus !== "all" && (
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      Status: {filterStatus}
-                      <button
-                        onClick={() => setFilterStatus("all")}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSearchTerm("");
-                      setFilterType("all");
-                      setFilterStatus("all");
-                    }}
-                    className="text-gray-600 hover:text-gray-900"
-                  >
-                    Clear all
-                  </Button>
+            {error && <div className="text-red-500 mb-4">{error}</div>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {properties.map((property) => (
+                    <div key={property.id} className="bg-white rounded-[2.5rem] p-6 shadow-soft hover:shadow-2xl transition-all group flex flex-col">
+                        <div className="h-48 bg-gray-50 rounded-[2rem] mb-6 relative overflow-hidden shadow-inner">
+                            {property.images?.[0] ? (
+                                <img src={property.images[0]} alt={property.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                    <Building2 size={48} />
+                                </div>
+                            )}
+                            <div className="absolute top-4 left-4 flex gap-2">
+                                <span className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black text-gray-900 shadow-lg uppercase tracking-widest">
+                                    {property.type?.replace('_', ' ')}
+                                </span>
+                            </div>
+                            <div className="absolute top-4 right-4 flex gap-2">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleOpenModal(property); }}
+                                  className="p-3 bg-white/90 backdrop-blur rounded-2xl text-gray-400 hover:text-primary shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <Edit2 size={16} />
+                                </button>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleDelete(property.id); }}
+                                  className="p-3 bg-white/90 backdrop-blur rounded-2xl text-gray-400 hover:text-red-500 shadow-lg transition-all opacity-0 group-hover:opacity-100"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <h3 className="font-black text-xl text-gray-900 mb-1 tracking-tight">{property.title}</h3>
+                        <div className="flex items-start gap-2 text-gray-500 text-sm mb-4">
+                            <MapPin size={16} className="mt-0.5 shrink-0" />
+                            <span className="line-clamp-1">{property.address || 'No address provided'}</span>
+                        </div>
+
+                        <div className="flex items-center gap-4 border-t border-gray-50 pt-6 mt-auto text-sm">
+                            <div className="flex items-center gap-1.5 text-gray-600 font-bold">
+                                <Square size={16} />
+                                <span>{property.units?.length || 0} Units</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 ml-auto">
+                                <StatusBadge status={property.status || 'AVAILABLE'} />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+
+                {properties.length === 0 && (
+                     <div className="col-span-full text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mx-auto mb-4">
+                           <Building2 size={32} />
+                        </div>
+                        <h3 className="text-gray-900 font-bold mb-1">No properties yet</h3>
+                        <p className="text-gray-500 text-sm mb-4">Get started by adding your first property</p>
+                     </div>
+                )}
+            </div>
+
+            {/* Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-10">
+                    <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsModalOpen(false)} />
+                    <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="px-10 pt-10 pb-6 flex justify-between items-center bg-gray-50/50">
+                            <div>
+                                <h2 className="text-3xl font-black text-gray-900 tracking-tight">
+                                    {editingProperty ? 'Edit Property' : 'Add Property'}
+                                </h2>
+                                <p className="text-gray-500 text-sm font-medium">Configure primary asset details</p>
+                            </div>
+                            <button onClick={() => setIsModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors">
+                                <X size={24} className="text-gray-400" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="p-10 space-y-6">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="col-span-2">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Property Title</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                        placeholder="e.g. Haven Heights Complex"
+                                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20 placeholder:text-gray-300"
+                                    />
+                                </div>
+
+                                <div className="col-span-2">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Physical Address</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        value={formData.address}
+                                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                                        placeholder="Enter street name and location"
+                                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20 placeholder:text-gray-300"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">City</label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.city}
+                                        onChange={(e) => setFormData({...formData, city: e.target.value})}
+                                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">State / Province</label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.state}
+                                        onChange={(e) => setFormData({...formData, state: e.target.value})}
+                                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Monthly Rent Est. ($)</label>
+                                    <input 
+                                        type="number" 
+                                        required
+                                        value={formData.rentAmount}
+                                        onChange={(e) => setFormData({...formData, rentAmount: e.target.value})}
+                                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Property Type</label>
+                                    <select 
+                                        value={formData.type}
+                                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                                        className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="APARTMENT">Apartment</option>
+                                        <option value="SINGLE_ROOM">Single Room</option>
+                                        <option value="BUNGALOW">Bungalow</option>
+                                        <option value="MAISONETTE">Maisonette</option>
+                                        <option value="VILLA">Villa</option>
+                                        <option value="OFFICE">Office Space</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-gray-50 flex gap-4">
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="flex-1 px-8 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="flex-[2] px-8 py-4 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary transition-all shadow-xl hover:shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : (editingProperty ? 'Update Property' : 'Register Property')}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-              </div>
             )}
-          </Card>
-        )}
-
-        {/* Results Summary and View Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Showing {filteredAndSortedProperties.length} of {properties.length}{" "}
-            properties
-          </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("grid")}
-              className={`h-8 px-3 ${
-                viewMode === "grid" ? "bg-white shadow-sm" : "hover:bg-gray-200"
-              }`}
-            >
-              <Grid className="h-4 w-4" />
-              <span className="ml-1 hidden sm:inline">Grid</span>
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className={`h-8 px-3 ${
-                viewMode === "list" ? "bg-white shadow-sm" : "hover:bg-gray-200"
-              }`}
-            >
-              <List className="h-4 w-4" />
-              <span className="ml-1 hidden sm:inline">List</span>
-            </Button>
-          </div>
         </div>
-      </div>
-
-      {/* Properties Grid/List */}
-      <PropertyGrid
-        properties={filteredAndSortedProperties}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onPropertySelect={handlePropertySelect}
-        onPropertyFavorite={handlePropertyFavorite}
-        loading={loading}
-        loadingCount={6}
-      />
-
-      {/* Empty State */}
-      {!loading && filteredAndSortedProperties.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-            <MapPin className="h-10 w-10 text-gray-400" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {searchTerm || filterType !== "all" || filterStatus !== "all"
-              ? "No properties match your criteria"
-              : "No properties yet"}
-          </h3>
-          <p className="text-gray-600 mb-8 max-w-md">
-            {searchTerm || filterType !== "all" || filterStatus !== "all"
-              ? "Try adjusting your search terms or filters to find what you're looking for."
-              : "Get started by adding your first property to the system."}
-          </p>
-          <div className="flex gap-3">
-            {(searchTerm || filterType !== "all" || filterStatus !== "all") && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchTerm("");
-                  setFilterType("all");
-                  setFilterStatus("all");
-                }}
-              >
-                Clear Filters
-              </Button>
-            )}
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Property
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Enhanced Property Form Modal */}
-      <PropertyFormModal
-        isOpen={showModal}
-        onClose={handleCloseModal}
-        onSubmit={handleSubmit}
-        property={editingProperty}
-        loading={submitLoading}
-      />
-    </div>
-  );
+    );
 };
 
 export default Properties;

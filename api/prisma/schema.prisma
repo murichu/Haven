@@ -74,6 +74,15 @@ model Agency {
   caretakers      Caretaker[]
   expenses        Expense[]
   auditLogs       AuditLog[]
+  penalties       Penalty[]
+  vacateNotices   VacateNotice[]
+  notices         Notice[]
+  
+  // Messaging relations
+  messages                Message[]
+  messageTemplates        MessageTemplate[]
+  communicationPreferences CommunicationPreference[]
+  channelConfiguration    ChannelConfiguration?
 }
 
 model User {
@@ -119,6 +128,7 @@ model Property {
   leases      Lease[]
   units       Unit[]
   expenses    Expense[]
+  notices     Notice[]
 
   @@index([agencyId, status])
 }
@@ -181,6 +191,7 @@ model Lease {
   invoices           Invoice[]
   mpesaTransactions  MpesaTransaction[]
   pesapalTransactions PesapalTransaction[]
+  vacateNotices       VacateNotice[]
 }
 
 model Invoice {
@@ -201,6 +212,7 @@ model Invoice {
   
   // Relations
   payments    Payment[]
+  penalties   Penalty[]
 
   @@index([status])
   @@index([leaseId])
@@ -455,4 +467,189 @@ model AuditLog {
   @@index([action])
   @@index([entityType])
   @@index([timestamp])
+}
+
+// Messaging - System for communication with tenants and agents
+model Message {
+  id              String             @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId        String             @db.ObjectId
+  agency          Agency             @relation(fields: [agencyId], references: [id])
+  senderId        String?            @db.ObjectId
+  senderType      String             // USER, AGENT, SYSTEM
+  senderName      String?
+  recipientType   String             // TENANT, AGENT, USER
+  recipientIds    String[]           // IDs of recipients
+  subject         String?
+  content         String
+  messageType     String             @default("GENERAL") // GENERAL, RENT_REMINDER, MAINTENANCE, etc.
+  priority        String             @default("NORMAL")  // LOW, NORMAL, HIGH, URGENT
+  channels        String[]           // email, sms, whatsapp
+  status          String             @default("PENDING") // PENDING, SENT, FAILED, PARTIAL, SCHEDULED
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  templateId      String?            @db.ObjectId
+  template        MessageTemplate?   @relation(fields: [templateId], references: [id])
+  properties      String[]           // Affected property IDs
+  leases          String[]           // Affected lease IDs
+  deliveryStatus  Json?              // Overall delivery results
+  metadata        Json?              // Additional system metadata
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  recipients      MessageRecipient[]
+
+  @@index([agencyId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model MessageRecipient {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  messageId       String    @db.ObjectId
+  message         Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  recipientId     String    @db.ObjectId
+  recipientType   String    // TENANT, AGENT, USER
+  recipientName   String?
+  recipientPhone  String?
+  recipientEmail  String?
+  channels        String[]  // Channels used for this recipient
+  deliveryStatus  Json?     // Individual channel results {email: {success: true, sentAt: ...}}
+  sentAt          DateTime?
+  createdAt       DateTime  @default(now())
+  
+  @@index([messageId])
+  @@index([recipientId])
+}
+
+model MessageTemplate {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  name            String    // Template name
+  category        String    // RENT_REMINDER, WELCOME, etc.
+  subject         String?
+  content         String    // Template content with {placeholders}
+  channels        String[]  // Allowed channels for this template
+  variables       String[]  // List of variables available in this template
+  isDefault       Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  createdBy       String?   @db.ObjectId
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  messages        Message[]
+
+  @@index([agencyId, category])
+}
+
+model CommunicationPreference {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId          String    @db.ObjectId
+  agency            Agency    @relation(fields: [agencyId], references: [id])
+  recipientId       String    @db.ObjectId // Tenant/Agent/User ID
+  recipientType     String    // TENANT, AGENT, USER
+  preferredChannels String[]  @default(["email"])
+  emailEnabled      Boolean   @default(true)
+  smsEnabled        Boolean   @default(true)
+  whatsappEnabled   Boolean   @default(false)
+  quietHours        Json?     // {start: "22:00", end: "08:00"}
+  messageTypes      String[]  @default(["GENERAL", "RENT_REMINDER", "URGENT"])
+  language          String    @default("en")
+  timezone          String    @default("Africa/Nairobi")
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([agencyId, recipientId, recipientType])
+  @@index([recipientId])
+}
+
+model ChannelConfiguration {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId          String    @unique @db.ObjectId
+  agency            Agency    @relation(fields: [agencyId], references: [id])
+  emailEnabled      Boolean   @default(true)
+  emailProvider     String?   // sendgrid, mailgun, aws_ses
+  emailConfig       Json?     // API keys, from address, etc.
+  emailFromName     String?
+  emailFromAddress  String?
+  smsEnabled        Boolean   @default(false)
+  smsProvider       String?   // twilio, africastalking
+  smsConfig         Json?
+  smsFromNumber     String?
+  whatsappEnabled   Boolean   @default(false)
+  whatsappProvider  String?
+  whatsappConfig    Json?
+  whatsappFromNumber String?
+  defaultChannels   String[]  @default(["email"])
+  maxRetries        Int       @default(3)
+  retryDelay        Int       @default(300) // seconds
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// Penalties - Track late payments and other violations
+model Penalty {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId    String   @db.ObjectId
+  agency      Agency   @relation(fields: [agencyId], references: [id])
+  invoiceId   String?  @db.ObjectId
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  noticeId    String?  @db.ObjectId
+  notice      VacateNotice? @relation(fields: [noticeId], references: [id])
+  type        String   // LATE_PAYMENT, OVERSTAY, DAMAGE, OTHER
+  amount      Float
+  days        Int?
+  reason      String?
+  status      String   @default("PENDING") // PENDING, PAID, WAIVED
+  computedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([status])
+}
+
+// VacateNotice - Tenant move-out requests
+model VacateNotice {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId         String    @db.ObjectId
+  lease           Lease     @relation(fields: [leaseId], references: [id])
+  tenantId        String    @db.ObjectId
+  unitId          String?   @db.ObjectId
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  noticeDate      DateTime  @default(now())
+  plannedVacateAt DateTime
+  actualVacateAt  DateTime?
+  reason          String?
+  status          String    @default("PENDING") // PENDING, OVERDUE, COMPLETED, CANCELLED
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  penalties       Penalty[]
+
+  @@index([agencyId])
+  @@index([status])
+}
+
+// Notice - Digital broadcasting system for announcements
+model Notice {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId    String    @db.ObjectId
+  agency      Agency    @relation(fields: [agencyId], references: [id])
+  propertyId  String?   @db.ObjectId
+  property    Property? @relation(fields: [propertyId], references: [id])
+  title       String
+  content     String
+  priority    String    @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  category    String    @default("GENERAL") // GENERAL, MAINTENANCE, SECURITY, EVENT
+  expiresAt   DateTime?
+  status      String    @default("ACTIVE") // ACTIVE, ARCHIVED, EXPIRED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([propertyId])
+  @@index([status])
 }

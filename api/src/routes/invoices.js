@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { getInvoicesOptimized, queryTimeMiddleware } from "../services/queryOptimizer.js";
 import { paginate } from "../middleware/pagination.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const invoiceRouter = Router();
 
@@ -81,7 +82,7 @@ invoiceRouter.get("/generate/:leaseId", async (req, res) => {
   const created = await prisma.invoice.create({
     data: {
       leaseId: lease.id,
-      agencyId: req.user.agencyId,
+      agencyId: req.agencyId,
       amount: lease.rentAmount,
       periodYear,
       periodMonth,
@@ -89,6 +90,14 @@ invoiceRouter.get("/generate/:leaseId", async (req, res) => {
       dueAt,
     },
   });
+
+  await auditLog(req, {
+    action: "CREATE",
+    entityType: "Invoice",
+    entityId: created.id,
+    description: `Manual invoice generated for Period: ${periodMonth}/${periodYear}, Lease ID: ${lease.id}`
+  });
+
   res.status(201).json(created);
 });
 
@@ -99,6 +108,14 @@ invoiceRouter.put("/:id/status", async (req, res) => {
   const existing = await prisma.invoice.findFirst({ where: { id: req.params.id, agencyId: req.user.agencyId } });
   if (!existing) return res.status(404).json({ error: "Not found" });
   const updated = await prisma.invoice.update({ where: { id: existing.id }, data: { status: parsed.data.status } });
+
+  await auditLog(req, {
+    action: "STATUS_CHANGE",
+    entityType: "Invoice",
+    entityId: updated.id,
+    description: `Invoice status manually updated to ${parsed.data.status}`
+  });
+
   res.json(updated);
 });
 

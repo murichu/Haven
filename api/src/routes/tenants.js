@@ -11,6 +11,7 @@ import {
 } from "../middleware/centralizedErrorHandler.js";
 import logger from "../utils/logger.js";
 import { successResponse, errorResponse } from "../utils/responses.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const tenantRouter = Router();
 
@@ -49,7 +50,7 @@ tenantRouter.get(
         );
 
         const tenantStream = await streamingService.streamTenants(
-          req.user.agencyId,
+          req.agencyId,
           options
         );
         const csvHeaders = ["id", "name", "email", "phone", "createdAt"];
@@ -72,12 +73,12 @@ tenantRouter.get(
           tenantStream.pipe(csvTransform).pipe(monitoringStream),
           {
             contentType: "text/csv",
-            filename: `tenants-${req.user.agencyId}-${
+            filename: `tenants-${req.agencyId}-${
               new Date().toISOString().split("T")[0]
             }.csv`,
             headers: {
               "X-Stream-Type": "tenants",
-              "X-Agency-Id": req.user.agencyId,
+              "X-Agency-Id": req.agencyId,
             },
           }
         );
@@ -88,7 +89,7 @@ tenantRouter.get(
       const { getTenantsOptimized } = await import(
         "../services/queryOptimizer.js"
       );
-      const result = await getTenantsOptimized(req.user.agencyId, options);
+      const result = await getTenantsOptimized(req.agencyId, options);
       return successResponse(res, result, "Tenants retrieved");
     } catch (error) {
       logger.error("Error fetching tenants:", error);
@@ -106,8 +107,17 @@ tenantRouter.post(
         throw new ValidationError("Invalid input", parsed.error.flatten());
 
       const created = await prisma.tenant.create({
-        data: { ...parsed.data, agencyId: req.user.agencyId },
+        data: { ...parsed.data, agencyId: req.agencyId },
       });
+
+      await auditLog(req, {
+        action: "CREATE",
+        entityType: "Tenant",
+        entityId: created.id,
+        entityName: created.name,
+        description: `New tenant profile created: ${created.name}`
+      });
+
       return successResponse(res, created, "Tenant created", 201);
     } catch (error) {
       logger.error("Error creating tenant:", error);
@@ -122,7 +132,7 @@ tenantRouter.get(
   asyncHandler(async (req, res) => {
     try {
       const item = await prisma.tenant.findFirst({
-        where: { id: req.params.id, agencyId: req.user.agencyId },
+        where: { id: req.params.id, agencyId: req.agencyId },
       });
       if (!item) throw new NotFoundError("Tenant not found");
       return successResponse(res, item, "Tenant retrieved");
@@ -149,6 +159,15 @@ tenantRouter.put(
         where: { id: existing.id },
         data: parsed.data,
       });
+
+      await auditLog(req, {
+        action: "UPDATE",
+        entityType: "Tenant",
+        entityId: updated.id,
+        entityName: updated.name,
+        description: `Tenant information updated: ${updated.name}`
+      });
+
       return successResponse(res, updated, "Tenant updated");
     } catch (error) {
       logger.error("Error updating tenant:", error);
@@ -168,6 +187,15 @@ tenantRouter.delete(
       });
       if (!existing) throw new NotFoundError("Tenant not found");
       await prisma.tenant.delete({ where: { id: existing.id } });
+
+      await auditLog(req, {
+        action: "DELETE",
+        entityType: "Tenant",
+        entityId: existing.id,
+        entityName: existing.name,
+        description: `Tenant profile removed: ${existing.name}`
+      });
+
       return successResponse(res, null, "Tenant deleted", 204);
     } catch (error) {
       logger.error("Error deleting tenant:", error);

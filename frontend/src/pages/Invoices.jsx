@@ -1,482 +1,247 @@
-import { useEffect, useState } from "react";
-import {
-  FileText,
-  Search,
-  Plus,
-  Calendar,
-  DollarSign,
-  Download,
-  Send,
-  Filter,
-  X,
-  User,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { apiClient } from "../config/api";
+import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { Receipt, Plus, Search, Filter, MoreVertical, Download, Send, Calendar, DollarSign, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import StatusBadge from '../components/shared/StatusBadge';
+import EmptyState from '../components/shared/EmptyState';
+import { TableRowSkeleton } from '../components/ui/Skeleton';
+import { useToast } from '../components/ui/Toast';
 
 const Invoices = () => {
   const [invoices, setInvoices] = useState([]);
-  const [leases, setLeases] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterStatus, setFilterStatus] = useState("all");
-
-  const [formData, setFormData] = useState({
-    leaseId: "",
-    amount: "",
-    periodYear: new Date().getFullYear().toString(),
-    periodMonth: (new Date().getMonth() + 1).toString(),
-    issuedAt: new Date().toISOString().split("T")[0],
-    dueAt: "",
-  });
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const { showToast } = useToast();
 
   useEffect(() => {
     fetchInvoices();
-    fetchLeases();
   }, []);
 
   const fetchInvoices = async () => {
+    setLoading(true);
     try {
-      const response = await apiClient.get("/invoices");
-      const invoicesData =
-        response.data?.data?.invoices ||
-        response.data?.invoices ||
-        response.data?.data ||
-        response.data ||
-        [];
-      setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
-    } catch (error) {
-      console.error("Error fetching invoices:", error);
-      setError("Failed to load invoices");
+      const response = await api.get('/invoices');
+      const payload = response.data.data;
+      const invoicesArray = Array.isArray(payload) ? payload : (payload?.items || payload?.invoices || []);
+      setInvoices(invoicesArray);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load invoices');
+      showToast('Error loading invoices', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchLeases = async () => {
-    try {
-      const response = await apiClient.get("/leases");
-      const leasesData =
-        response.data?.data?.leases ||
-        response.data?.leases ||
-        response.data?.data ||
-        response.data ||
-        [];
-      setLeases(Array.isArray(leasesData) ? leasesData : []);
-    } catch (error) {
-      console.error("Error fetching leases:", error);
-    }
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
   };
 
-  const handleOpenModal = (invoice = null) => {
-    if (invoice) {
-      setEditingInvoice(invoice);
-      setFormData({
-        leaseId: invoice.leaseId || "",
-        amount: invoice.amount?.toString() || "",
-        periodYear:
-          invoice.periodYear?.toString() || new Date().getFullYear().toString(),
-        periodMonth:
-          invoice.periodMonth?.toString() ||
-          (new Date().getMonth() + 1).toString(),
-        issuedAt: invoice.issuedAt
-          ? new Date(invoice.issuedAt).toISOString().split("T")[0]
-          : "",
-        dueAt: invoice.dueAt
-          ? new Date(invoice.dueAt).toISOString().split("T")[0]
-          : "",
-      });
-    } else {
-      setEditingInvoice(null);
-      setFormData({
-        leaseId: "",
-        amount: "",
-        periodYear: new Date().getFullYear().toString(),
-        periodMonth: (new Date().getMonth() + 1).toString(),
-        issuedAt: new Date().toISOString().split("T")[0],
-        dueAt: "",
-      });
-    }
-    setError("");
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingInvoice(null);
-    setError("");
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-
-    try {
-      const payload = {
-        ...formData,
-        amount: parseInt(formData.amount),
-        periodYear: parseInt(formData.periodYear),
-        periodMonth: parseInt(formData.periodMonth),
-      };
-
-      if (editingInvoice) {
-        await apiClient.put(`/invoices/${editingInvoice.id}`, payload);
-        setSuccess("Invoice updated successfully");
-      } else {
-        await apiClient.post("/invoices", payload);
-        setSuccess("Invoice created successfully");
-      }
-      handleCloseModal();
-      fetchInvoices();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error saving invoice:", error);
-      setError(error.response?.data?.error || "Failed to save invoice");
-    }
-  };
-
-  const handleDelete = async (invoice) => {
-    if (!window.confirm("Are you sure you want to delete this invoice?")) {
-      return;
-    }
-
-    try {
-      await apiClient.delete(`/invoices/${invoice.id}`);
-      setSuccess("Invoice deleted successfully");
-      fetchInvoices();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error deleting invoice:", error);
-      setError(error.response?.data?.error || "Failed to delete invoice");
-      setTimeout(() => setError(""), 3000);
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    const variants = {
-      PENDING: "secondary",
-      PARTIAL: "warning",
-      PAID: "default",
-      OVERDUE: "destructive",
-    };
-    return variants[status] || "secondary";
-  };
-
-  const filteredInvoices = invoices.filter((invoice) => {
-    const matchesSearch = invoice.id
-      ?.toLowerCase()
-      .includes(searchTerm.toLowerCase());
-
-    const matchesStatus =
-      filterStatus === "all" || invoice.status === filterStatus;
-
+  const filteredInvoices = (Array.isArray(invoices) ? invoices : []).filter(invoice => {
+    const matchesSearch = invoice.lease?.tenant?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        invoice.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || invoice.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="text-muted-foreground">Loading invoices...</div>
-      </div>
-    );
-  }
+  const stats = {
+    total: invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0),
+    paid: invoices.filter(i => i.status === 'PAID').reduce((sum, inv) => sum + (inv.amount || 0), 0),
+    pending: invoices.filter(i => i.status === 'PENDING').reduce((sum, inv) => sum + (inv.amount || 0), 0),
+    overdue: invoices.filter(i => i.status === 'OVERDUE').reduce((sum, inv) => sum + (inv.amount || 0), 0),
+  };
 
   return (
-    <div className="space-y-8">
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-          {success}
+    <div className="animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Invoices</h1>
+          <p className="text-gray-500 mt-1">Manage billing, payments, and financial history</p>
         </div>
-      )}
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-            Invoices
-          </h1>
-          <p className="text-lg text-gray-600">
-            Manage rent invoices and billing
-          </p>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span>{filteredInvoices.length} invoices</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-          <Button onClick={() => handleOpenModal()}>
-            <Plus className="h-4 w-4 mr-2" />
+        <div className="flex gap-3">
+           <button className="bg-white text-gray-700 px-5 py-3 rounded-2xl font-bold shadow-soft border border-gray-100 hover:bg-gray-50 transition-all flex items-center gap-2">
+            <Download size={20} strokeWidth={2.5} />
+            Export CSV
+          </button>
+          <button className="bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] transition-all flex items-center gap-2">
+            <Plus size={20} strokeWidth={3} />
             Create Invoice
-          </Button>
+          </button>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="relative max-w-2xl">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search invoices..."
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100 group hover:border-primary/20 transition-all">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+              <DollarSign size={20} />
+            </div>
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Total Issued</p>
+          </div>
+          <h3 className="text-2xl font-black text-gray-900">${stats.total.toLocaleString()}</h3>
+          <div className="mt-2 flex items-center gap-1 text-blue-600 text-xs font-bold">
+            <Clock size={12} />
+            <span>Cumulative</span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100 group hover:border-green-500/20 transition-all">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center">
+              <CheckCircle2 size={20} />
+            </div>
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Total Paid</p>
+          </div>
+          <h3 className="text-2xl font-black text-green-600">${stats.paid.toLocaleString()}</h3>
+          <div className="mt-2 text-gray-400 text-xs font-bold">
+            {stats.total > 0 ? Math.round((stats.paid / stats.total) * 100) : 0}% Collection Rate
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100 group hover:border-yellow-500/20 transition-all">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-yellow-50 text-yellow-600 rounded-xl flex items-center justify-center">
+              <Clock size={20} />
+            </div>
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Pending</p>
+          </div>
+          <h3 className="text-2xl font-black text-yellow-600">${stats.pending.toLocaleString()}</h3>
+          <div className="mt-2 text-gray-400 text-xs font-bold">
+            Awaiting Confirmation
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100 group hover:border-red-500/20 transition-all">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
+              <AlertCircle size={20} />
+            </div>
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Overdue</p>
+          </div>
+          <h3 className="text-2xl font-black text-red-600">${stats.overdue.toLocaleString()}</h3>
+          <div className="mt-2 text-red-600/70 text-xs font-black uppercase">Action Required</div>
+        </div>
+      </div>
+
+      {/* Filters & Search */}
+      <div className="bg-white rounded-3xl p-4 shadow-soft border border-gray-100 mb-6 flex flex-col lg:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search by invoice number or tenant..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12"
+            className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all border-none"
           />
         </div>
-
-        {showFilters && (
-          <Card className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="all">All Status</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="PARTIAL">Partial</option>
-                  <option value="PAID">Paid</option>
-                  <option value="OVERDUE">Overdue</option>
-                </select>
-              </div>
-            </div>
-          </Card>
-        )}
+        <div className="flex gap-2">
+          {['ALL', 'PAID', 'PENDING', 'OVERDUE', 'PARTIAL'].map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                statusFilter === status
+                  ? 'bg-gray-900 text-white shadow-xl'
+                  : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredInvoices.map((invoice) => (
-          <Card key={invoice.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <FileText className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">
-                      KSh {invoice.amount?.toLocaleString()}
-                    </CardTitle>
-                    <Badge
-                      variant={getStatusBadge(invoice.status)}
-                      className="mt-1"
-                    >
-                      {invoice.status}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center text-sm text-gray-600">
-                <Calendar className="h-4 w-4 mr-2" />
-                Period: {invoice.periodMonth}/{invoice.periodYear}
-              </div>
-              <div className="flex items-center text-sm text-gray-600">
-                <Calendar className="h-4 w-4 mr-2" />
-                Due: {new Date(invoice.dueAt).toLocaleDateString()}
-              </div>
-              {invoice.totalPaid > 0 && (
-                <div className="flex items-center text-sm text-gray-600">
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Paid: KSh {invoice.totalPaid?.toLocaleString()}
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleOpenModal(invoice)}
-                  className="flex-1"
-                >
-                  Edit
-                </Button>
-                <Button variant="outline" size="sm" className="flex-1">
-                  <Download className="h-4 w-4 mr-1" />
-                  PDF
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Table Area */}
+      <div className="bg-white rounded-[2rem] shadow-soft border border-gray-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
+            <tr>
+              <th className="px-8 py-5">Invoice #</th>
+              <th className="px-8 py-5">Tenant</th>
+              <th className="px-8 py-5">Due Date</th>
+              <th className="px-8 py-5">Amount</th>
+              <th className="px-8 py-5">Status</th>
+              <th className="px-8 py-5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {loading ? (
+              [...Array(5)].map((_, i) => <TableRowSkeleton key={i} />)
+            ) : filteredInvoices.length === 0 ? (
+              <tr>
+                <td colSpan="6">
+                  <EmptyState
+                    icon={Receipt}
+                    title="No invoices found"
+                    description="It looks like there are no invoices matching your current filter."
+                    action={
+                      <button onClick={() => {setSearchTerm(''); setStatusFilter('ALL')}} className="text-primary font-bold text-sm underline decoration-primary/30 underline-offset-4">Reset Dashboard</button>
+                    }
+                  />
+                </td>
+              </tr>
+            ) : (
+              filteredInvoices.map((invoice) => (
+                <tr key={invoice.id} className="group hover:bg-gray-50/50 transition-all duration-300">
+                  <td className="px-8 py-5">
+                    <span className="font-mono text-sm font-black text-gray-900 bg-gray-50 px-2 py-1 rounded-lg">
+                      #{invoice.id.slice(-6).toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="px-8 py-5">
+                     <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-primary/5 text-primary flex items-center justify-center font-black text-xs">
+                          {invoice.lease?.tenant?.name?.charAt(0) || 'T'}
+                        </div>
+                        <div>
+                           <p className="text-sm font-bold text-gray-900">{invoice.lease?.tenant?.name || 'Unknown'}</p>
+                           <p className="text-[10px] text-gray-400 font-medium">{invoice.lease?.property?.name || 'N/A'}</p>
+                        </div>
+                     </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                      <Calendar size={14} className="text-gray-400" />
+                      {formatDate(invoice.dueAt)}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <p className="text-base font-black text-gray-900">${invoice.amount?.toLocaleString()}</p>
+                  </td>
+                  <td className="px-8 py-5">
+                    <StatusBadge status={invoice.status} />
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-primary transition-all" title="Send Invoice">
+                        <Send size={16} />
+                      </button>
+                      <button className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-primary transition-all" title="Download PDF">
+                        <Download size={16} />
+                      </button>
+                      <button className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-primary transition-all">
+                        <MoreVertical size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
-
-      {filteredInvoices.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <FileText className="h-16 w-16 text-gray-400 mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            No invoices found
-          </h3>
-          <p className="text-gray-600 mb-8">
-            {searchTerm || filterStatus !== "all"
-              ? "Try adjusting your filters"
-              : "Get started by creating your first invoice"}
-          </p>
-          <Button onClick={() => handleOpenModal()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Invoice
-          </Button>
-        </div>
-      )}
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">
-                {editingInvoice ? "Edit Invoice" : "Create Invoice"}
-              </h2>
-              <button
-                onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Lease *
-                </label>
-                <select
-                  value={formData.leaseId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, leaseId: e.target.value })
-                  }
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select Lease</option>
-                  {leases.map((lease) => (
-                    <option key={lease.id} value={lease.id}>
-                      Lease {lease.id.slice(0, 8)}...
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount (KSh) *
-                </label>
-                <Input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Period Month *
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={formData.periodMonth}
-                    onChange={(e) =>
-                      setFormData({ ...formData, periodMonth: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Period Year *
-                  </label>
-                  <Input
-                    type="number"
-                    value={formData.periodYear}
-                    onChange={(e) =>
-                      setFormData({ ...formData, periodYear: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Issued Date *
-                </label>
-                <Input
-                  type="date"
-                  value={formData.issuedAt}
-                  onChange={(e) =>
-                    setFormData({ ...formData, issuedAt: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Due Date *
-                </label>
-                <Input
-                  type="date"
-                  value={formData.dueAt}
-                  onChange={(e) =>
-                    setFormData({ ...formData, dueAt: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCloseModal}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  {editingInvoice ? "Update" : "Create"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
 export default Invoices;
+

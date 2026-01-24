@@ -10,6 +10,7 @@ import {
 } from "../middleware/centralizedErrorHandler.js";
 import logger from "../utils/logger.js";
 import { successResponse, errorResponse } from "../utils/responses.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const usersRouter = Router();
 
@@ -66,9 +67,18 @@ usersRouter.post(
           email,
           passwordHash,
           role: role || "USER",
-          agencyId: req.user.agencyId,
+          agencyId: req.agencyId,
         },
       });
+
+      await auditLog(req, {
+        action: "CREATE",
+        entityType: "User",
+        entityId: created.id,
+        entityName: created.name,
+        description: `New user account created: ${created.email}`
+      });
+
       return successResponse(
         res,
         {
@@ -111,6 +121,15 @@ usersRouter.put(
         where: { id: existing.id },
         data: parsed.data,
       });
+
+      await auditLog(req, {
+        action: "UPDATE",
+        entityType: "User",
+        entityId: updated.id,
+        entityName: updated.name,
+        description: `User role/profile updated: ${updated.email}`
+      });
+
       return successResponse(
         res,
         {
@@ -141,6 +160,15 @@ usersRouter.delete(
         throw new NotFoundError("User not found");
       }
       await prisma.user.delete({ where: { id: existing.id } });
+
+      await auditLog(req, {
+        action: "DELETE",
+        entityType: "User",
+        entityId: existing.id,
+        entityName: existing.name,
+        description: `Internal user account revoked: ${existing.email}`
+      });
+
       return successResponse(res, null, "User deleted successfully", 204);
     } catch (error) {
       if (error instanceof NotFoundError) throw error;

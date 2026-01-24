@@ -1,575 +1,325 @@
-import { useEffect, useState } from "react";
-import {
-  DollarSign,
-  Search,
-  Plus,
-  Calendar,
-  FileText,
-  Filter,
-  X,
-  Download,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { apiClient } from "../config/api";
+import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { DollarSign, Download, Search, Calendar, Plus, X, Loader2, Home, User, CreditCard, Hash } from 'lucide-react';
+import { useToast } from '../components/ui/Toast';
+import EmptyState from '../components/shared/EmptyState';
 
 const Payments = () => {
   const [payments, setPayments] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [leases, setLeases] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [editingPayment, setEditingPayment] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterMethod, setFilterMethod] = useState("all");
-  const [activeTab, setActiveTab] = useState("payments");
+  const [error, setError] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showToast } = useToast();
+  
+  // Data for selection
+  const [leases, setLeases] = useState([]);
 
   const [formData, setFormData] = useState({
-    leaseId: "",
-    amount: "",
-    paidAt: new Date().toISOString().split("T")[0],
-    method: "MANUAL",
-    referenceNumber: "",
-    notes: "",
+    leaseId: '',
+    amount: '',
+    paidAt: new Date().toISOString().split('T')[0],
+    method: 'MPESA',
+    referenceNumber: '',
+    description: ''
   });
 
   useEffect(() => {
-    fetchData();
+    fetchPayments();
+    fetchLeases();
   }, []);
 
-  const fetchData = async () => {
+  const fetchPayments = async () => {
+    setLoading(true);
     try {
-      const [paymentsRes, invoicesRes, leasesRes] = await Promise.all([
-        apiClient.get("/payments"),
-        apiClient.get("/invoices"),
-        apiClient.get("/leases"),
-      ]);
-
-      const paymentsData =
-        paymentsRes.data?.data?.payments ||
-        paymentsRes.data?.payments ||
-        paymentsRes.data?.data ||
-        paymentsRes.data ||
-        [];
-      const invoicesData =
-        invoicesRes.data?.data?.invoices ||
-        invoicesRes.data?.invoices ||
-        invoicesRes.data?.data ||
-        invoicesRes.data ||
-        [];
-      const leasesData =
-        leasesRes.data?.data?.leases ||
-        leasesRes.data?.leases ||
-        leasesRes.data?.data ||
-        leasesRes.data ||
-        [];
-
-      setPayments(Array.isArray(paymentsData) ? paymentsData : []);
-      setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
-      setLeases(Array.isArray(leasesData) ? leasesData : []);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      setError("Failed to load data");
+      const response = await api.get('/payments');
+      const payload = response.data.data;
+      const paymentsArray = Array.isArray(payload) ? payload : (payload?.items || payload?.payments || []);
+      setPayments(paymentsArray);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load payments');
+      showToast('Error loading payments', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpenModal = (payment = null) => {
-    if (payment) {
-      setEditingPayment(payment);
-      setFormData({
-        leaseId: payment.leaseId || "",
-        amount: payment.amount?.toString() || "",
-        paidAt: payment.paidAt
-          ? new Date(payment.paidAt).toISOString().split("T")[0]
-          : "",
-        method: payment.method || "MANUAL",
-        referenceNumber: payment.referenceNumber || "",
-        notes: payment.notes || "",
-      });
-    } else {
-      setEditingPayment(null);
-      setFormData({
-        leaseId: "",
-        amount: "",
-        paidAt: new Date().toISOString().split("T")[0],
-        method: "MANUAL",
-        referenceNumber: "",
-        notes: "",
-      });
+  const fetchLeases = async () => {
+    try {
+      const response = await api.get('/leases');
+      const payload = response.data.data;
+      const leasesArray = Array.isArray(payload) ? payload : (payload?.leases || []);
+      setLeases(leasesArray);
+    } catch (err) {
+      console.error("Failed to load leases:", err);
     }
-    setError("");
-    setShowModal(true);
   };
 
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingPayment(null);
+  const handleOpenModal = () => {
     setFormData({
-      leaseId: "",
-      amount: "",
-      paidAt: new Date().toISOString().split("T")[0],
-      method: "MANUAL",
-      referenceNumber: "",
-      notes: "",
+      leaseId: '',
+      amount: '',
+      paidAt: new Date().toISOString().split('T')[0],
+      method: 'MPESA',
+      referenceNumber: '',
+      description: ''
     });
-    setError("");
+    setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-
+    setIsSubmitting(true);
     try {
       const payload = {
         ...formData,
-        amount: parseInt(formData.amount),
+        amount: parseFloat(formData.amount),
+        paidAt: new Date(formData.paidAt).toISOString()
       };
-
-      if (editingPayment) {
-        await apiClient.put(`/payments/${editingPayment.id}`, payload);
-        setSuccess("Payment updated successfully");
-      } else {
-        await apiClient.post("/payments", payload);
-        setSuccess("Payment recorded successfully");
-      }
-      handleCloseModal();
-      fetchData();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error saving payment:", error);
-      setError(error.response?.data?.error || "Failed to save payment");
+      
+      await api.post('/payments', payload);
+      showToast('Payment recorded successfully', 'success');
+      setIsModalOpen(false);
+      fetchPayments();
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.error || 'Failed to record payment', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getPaymentMethodBadge = (method) => {
-    const variants = {
-      MPESA_C2B: "default",
-      MANUAL: "secondary",
-      BANK_TRANSFER: "outline",
-      CASH: "secondary",
-      PESAPAL: "default",
-      CARD: "outline",
-    };
-    return variants[method] || "secondary";
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  const getInvoiceStatusBadge = (status) => {
-    const variants = {
-      PENDING: "secondary",
-      PARTIAL: "warning",
-      PAID: "default",
-      OVERDUE: "destructive",
-    };
-    return variants[status] || "secondary";
-  };
+  const totalAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-  const filteredPayments = payments.filter((payment) => {
-    const matchesSearch =
-      payment.referenceNumber
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      payment.notes?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesMethod =
-      filterMethod === "all" || payment.method === filterMethod;
-
-    return matchesSearch && matchesMethod;
-  });
-
-  const filteredInvoices = invoices.filter((invoice) => {
-    return invoice.leaseId?.toLowerCase().includes(searchTerm.toLowerCase());
-  });
-
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="text-muted-foreground">Loading payments...</div>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-8 text-center text-gray-500">Loading payments...</div>;
 
   return (
-    <div className="space-y-8">
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-          {success}
+    <div>
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Payments</h1>
+          <p className="text-gray-500 font-medium mt-1">Audit trail of financial transactions and revenue collection</p>
         </div>
-      )}
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-            Payments & Invoices
-          </h1>
-          <p className="text-lg text-gray-600">
-            Track payments and manage invoices
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
+        <div className="flex gap-4">
+          <button 
+            onClick={handleOpenModal}
+            className="bg-primary text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all flex items-center gap-2"
           >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-          <Button onClick={() => handleOpenModal()}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus size={20} strokeWidth={3} />
             Record Payment
-          </Button>
+          </button>
+          <button className="bg-white text-gray-700 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-soft border border-gray-100 hover:bg-gray-50 transition-all flex items-center gap-2">
+            <Download size={20} className="text-gray-400" />
+            Export
+          </button>
         </div>
       </div>
 
-      <div className="flex gap-2 border-b">
-        <button
-          onClick={() => setActiveTab("payments")}
-          className={`px-4 py-2 font-medium ${
-            activeTab === "payments"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Payments ({filteredPayments.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("invoices")}
-          className={`px-4 py-2 font-medium ${
-            activeTab === "invoices"
-              ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Invoices ({filteredInvoices.length})
-        </button>
+      {/* Summary Card */}
+      <div className="bg-gradient-to-r from-primary to-orange-600 rounded-3xl p-6 mb-6 text-white shadow-lg">
+        <p className="text-white/80 text-sm mb-2">Total Payments Received</p>
+        <p className="text-4xl font-bold mb-4">${totalAmount.toLocaleString()}</p>
+        <div className="flex gap-6 text-sm">
+          <div>
+            <p className="text-white/80">Total Transactions</p>
+            <p className="font-bold text-lg">{payments.length}</p>
+          </div>
+          <div>
+            <p className="text-white/80">This Month</p>
+            <p className="font-bold text-lg">
+              {payments.filter(p => {
+                const paidDate = new Date(p.paidAt);
+                const now = new Date();
+                return paidDate.getMonth() === now.getMonth() && 
+                       paidDate.getFullYear() === now.getFullYear();
+              }).length}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="relative max-w-2xl">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search payments or invoices..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12"
+      {error && <div className="text-red-500 mb-4">{error}</div>}
+
+      {/* Payments List */}
+      {payments.length === 0 ? (
+        <div className="bg-white rounded-3xl shadow-soft">
+          <EmptyState
+            icon={DollarSign}
+            title="No payments recorded"
+            description="Payment history will appear here once tenants start making payments"
           />
         </div>
+      ) : (
+        <div className="bg-white rounded-3xl shadow-soft overflow-hidden">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold tracking-wider">
+              <tr>
+                <th className="px-6 py-4">Date</th>
+                <th className="px-6 py-4">Tenant</th>
+                <th className="px-6 py-4">Property</th>
+                <th className="px-6 py-4">Amount</th>
+                <th className="px-6 py-4">Method</th>
+                <th className="px-6 py-4">Receipt</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {payments.map((payment) => (
+                <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {formatDate(payment.paidAt)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">
+                        {payment.lease?.tenant?.name || 'N/A'}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {payment.lease?.unit?.unitNumber || ''}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {payment.lease?.property?.title || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="font-bold text-green-600">
+                      +${payment.amount?.toLocaleString() || '0'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold">
+                      {payment.method || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="font-mono text-xs text-gray-500">
+                      {payment.mpesaReceiptNumber || payment.id.slice(-8).toUpperCase()}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        {showFilters && activeTab === "payments" && (
-          <Card className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-10">
+          <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="px-10 pt-10 pb-6 flex justify-between items-center bg-gray-50/50">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method
-                </label>
-                <select
-                  value={filterMethod}
-                  onChange={(e) => setFilterMethod(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="all">All Methods</option>
-                  <option value="MPESA_C2B">M-Pesa</option>
-                  <option value="MANUAL">Manual</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="CASH">Cash</option>
-                  <option value="PESAPAL">PesaPal</option>
-                  <option value="CARD">Card</option>
-                </select>
+                <h2 className="text-3xl font-black text-gray-900 tracking-tight">Record Payment</h2>
+                <p className="text-gray-500 text-sm font-medium">Manually log a transaction into the ledger</p>
               </div>
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {activeTab === "payments" && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPayments.map((payment) => (
-            <Card
-              key={payment.id}
-              className="hover:shadow-lg transition-shadow"
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                      <DollarSign className="h-6 w-6 text-green-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">
-                        KSh {payment.amount?.toLocaleString()}
-                      </CardTitle>
-                      <Badge
-                        variant={getPaymentMethodBadge(payment.method)}
-                        className="mt-1"
-                      >
-                        {payment.method}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {new Date(payment.paidAt).toLocaleDateString()}
-                </div>
-                {payment.referenceNumber && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Ref: {payment.referenceNumber}
-                  </div>
-                )}
-                {payment.notes && (
-                  <div className="text-sm text-gray-600 line-clamp-2">
-                    {payment.notes}
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenModal(payment)}
-                    className="flex-1"
-                  >
-                    Edit
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {activeTab === "invoices" && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredInvoices.map((invoice) => (
-            <Card
-              key={invoice.id}
-              className="hover:shadow-lg transition-shadow"
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                      <FileText className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">
-                        KSh {invoice.amount?.toLocaleString()}
-                      </CardTitle>
-                      <Badge
-                        variant={getInvoiceStatusBadge(invoice.status)}
-                        className="mt-1"
-                      >
-                        {invoice.status}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Period: {invoice.periodMonth}/{invoice.periodYear}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Due: {new Date(invoice.dueAt).toLocaleDateString()}
-                </div>
-                {invoice.totalPaid > 0 && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Paid: KSh {invoice.totalPaid?.toLocaleString()}
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-4">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {((activeTab === "payments" && filteredPayments.length === 0) ||
-        (activeTab === "invoices" && filteredInvoices.length === 0)) && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          {activeTab === "payments" ? (
-            <DollarSign className="h-16 w-16 text-gray-400 mb-4" />
-          ) : (
-            <FileText className="h-16 w-16 text-gray-400 mb-4" />
-          )}
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            No {activeTab} found
-          </h3>
-          <p className="text-gray-600 mb-8">
-            {searchTerm || filterMethod !== "all"
-              ? "Try adjusting your filters"
-              : `Get started by ${
-                  activeTab === "payments"
-                    ? "recording your first payment"
-                    : "creating your first invoice"
-                }`}
-          </p>
-          {activeTab === "payments" && (
-            <Button onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Record Payment
-            </Button>
-          )}
-        </div>
-      )}
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">
-                {editingPayment ? "Edit Payment" : "Record Payment"}
-              </h2>
-              <button
-                onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
+              <button onClick={() => setIsModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors">
+                <X size={24} className="text-gray-400" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="p-10 space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Lease *
-                </label>
-                <select
-                  value={formData.leaseId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, leaseId: e.target.value })
-                  }
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Select Active Lease</label>
+                <select 
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={formData.leaseId}
+                  onChange={(e) => setFormData({...formData, leaseId: e.target.value})}
+                  className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20 appearance-none"
                 >
-                  <option value="">Select Lease</option>
-                  {leases.map((lease) => (
-                    <option key={lease.id} value={lease.id}>
-                      Lease {lease.id.slice(0, 8)}...
+                  <option value="">Search by tenant or property...</option>
+                  {leases.map(l => (
+                    <option key={l.id} value={l.id}>
+                      {l.tenant?.name} - {l.property?.title || 'Direct Unit'}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Amount (KSh) *
-                </label>
-                <Input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, amount: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Date *
-                </label>
-                <Input
-                  type="date"
-                  value={formData.paidAt}
-                  onChange={(e) =>
-                    setFormData({ ...formData, paidAt: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Method *
-                </label>
-                <select
-                  value={formData.method}
-                  onChange={(e) =>
-                    setFormData({ ...formData, method: e.target.value })
-                  }
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="MANUAL">Manual</option>
-                  <option value="MPESA_C2B">M-Pesa</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="CASH">Cash</option>
-                  <option value="PESAPAL">PesaPal</option>
-                  <option value="CARD">Card</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reference Number
-                </label>
-                <Input
-                  value={formData.referenceNumber}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      referenceNumber: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  rows="3"
-                />
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
-                  {error}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Payment Amount ($)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                    <input 
+                      type="number" 
+                      required
+                      value={formData.amount}
+                      onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                      className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
                 </div>
-              )}
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Transaction Date</label>
+                  <input 
+                    type="date" 
+                    required
+                    value={formData.paidAt}
+                    onChange={(e) => setFormData({...formData, paidAt: e.target.value})}
+                    className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              </div>
 
-              <div className="flex gap-3 pt-4">
-                <Button
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Payment Method</label>
+                  <select 
+                    value={formData.method}
+                    onChange={(e) => setFormData({...formData, method: e.target.value})}
+                    className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="MPESA">M-Pesa</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="CASH">Cash</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="CARD">Credit/Debit Card</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Reference Number</label>
+                  <div className="relative">
+                    <Hash className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                    <input 
+                      type="text" 
+                      value={formData.referenceNumber}
+                      onChange={(e) => setFormData({...formData, referenceNumber: e.target.value})}
+                      placeholder="e.g. QXJ928HS"
+                      className="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold border-none focus:ring-2 focus:ring-primary/20 placeholder:text-gray-300"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-50 flex gap-4">
+                <button 
                   type="button"
-                  variant="outline"
-                  onClick={handleCloseModal}
-                  className="flex-1"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-8 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-200 transition-all"
                 >
                   Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  {editingPayment ? "Update" : "Record"}
-                </Button>
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-[2] px-8 py-4 bg-gray-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary transition-all shadow-xl hover:shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : 'Confirm Payment'}
+                </button>
               </div>
             </form>
           </div>

@@ -1,176 +1,101 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Building2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { apiClient } from "../config/api";
-import loggingService from "../services/loggingService";
-import toastService from "../services/toastService";
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { Building2, ArrowRight, Loader2 } from 'lucide-react';
 
-const Login = ({ setIsAuthenticated }) => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+const Login = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    if (!email || !password) return;
+
     setLoading(true);
-
-    // Log login attempt
-    const correlationId = loggingService.logUserAction(
-      "login_attempt",
-      "Login",
-      {
-        email: email.replace(/(.{2}).*@/, "$1***@"), // Mask email for privacy
-        timestamp: new Date().toISOString(),
-      }
-    );
-
-    try {
-      const response = await apiClient.post("/auth/login", {
-        email,
-        password,
-      });
-
-      if (response.data.token) {
-        // Store authentication data
-        localStorage.setItem("token", response.data.token);
-        if (response.data.user) {
-          localStorage.setItem("user", JSON.stringify(response.data.user));
-        }
-        if (response.data.refreshToken) {
-          localStorage.setItem("refreshToken", response.data.refreshToken);
-        }
-
-        // Log successful login
-        loggingService.logUserAction("login_success", "Login", {
-          userId: response.data.user?.id,
-          userRole: response.data.user?.role,
-          correlationId,
-        });
-
-        // Log security event
-        loggingService.logSecurity("user_login", {
-          userId: response.data.user?.id,
-          email: email.replace(/(.{2}).*@/, "$1***@"),
-          correlationId,
-        });
-
-        // Show success message
-        toastService.success("Welcome back! Login successful.", {
-          title: "Login Successful",
-          correlationId,
-        });
-
-        setIsAuthenticated(true);
-
-        // Log navigation
-        loggingService.logNavigation("/login", "/", "post_login_redirect");
-
-        navigate("/");
-      } else {
-        // Log authentication failure
-        loggingService.error("Login response missing token", {
-          category: loggingService.LogCategories.API_ERROR,
-          component: "Login",
-          correlationId,
-          responseData: response.data,
-        });
-
-        setError("Login failed. Invalid response from server.");
-      }
-    } catch (err) {
-      // Log login error with context
-      loggingService.logApiError(err, "/api/v1/auth/login", "POST");
-
-      // Log security event for failed login
-      loggingService.logSecurity("login_failed", {
-        email: email.replace(/(.{2}).*@/, "$1***@"),
-        error: err.response?.data?.error || err.message,
-        statusCode: err.response?.status,
-        correlationId,
-      });
-
-      const errorMessage =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        "Login failed. Please try again.";
-
-      setError(errorMessage);
-
-      // Show error toast
-      toastService.error(errorMessage, {
-        title: "Login Failed",
-        correlationId,
-        retryable: err.response?.status >= 500,
-        onRetry: () => handleSubmit(e),
-      });
-    } finally {
-      setLoading(false);
+    setError('');
+    
+    const result = await login(email, password);
+    if (result.success) {
+      navigate('/');
+    } else {
+      setError(result.error);
     }
+    setLoading(false);
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary">
-            <Building2 className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-2xl font-bold">Welcome to Haven</CardTitle>
-          <CardDescription>
-            Enter your credentials to access your property management dashboard
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="admin@acme.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+    <div className="min-h-screen bg-[#F2F1EF] flex items-center justify-center p-4 font-inter">
+      <div className="bg-white p-8 md:p-10 rounded-3xl shadow-soft w-full max-w-md">
+         {/* Logo */}
+         <div className="flex justify-center mb-8">
+            <div className="flex items-center gap-3">
+               <div className="w-12 h-12 bg-[#FF4D15] rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-orange-500/20 transform rotate-3">
+                   F
+               </div>
+               <span className="font-plaster text-3xl font-bold text-gray-900">Finexy</span>
             </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+         </div>
+
+         <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h1>
+            <p className="text-gray-500">Sign in to access your properties</p>
+         </div>
+
+         {error && (
+           <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm mb-6 flex items-center gap-2">
+              <div className="w-1 h-1 rounded-full bg-red-600"></div>
+              {error}
+           </div>
+         )}
+         
+         <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1.5 ml-1">Email address</label>
+               <input 
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-5 py-3 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
+                  placeholder="name@company.com"
+               />
             </div>
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            
+            <div>
+               <div className="flex justify-between items-center mb-1.5 ml-1">
+                  <label className="block text-sm font-medium text-gray-700">Password</label>
+                  <a href="#" className="text-xs text-primary font-bold hover:underline">Forgot?</a>
+               </div>
+               <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-5 py-3 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
+                  placeholder="••••••••"
+               />
+            </div>
+
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-[#FF4D15] text-white py-3.5 rounded-2xl font-bold text-sm shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:hover:translate-y-0"
+            >
+              {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                 <>
+                   Sign In <ArrowRight size={18} />
+                 </>
+              )}
+            </button>
+         </form>
+
+         <div className="mt-8 text-center text-sm text-gray-500">
+            Don't have an account? 
+            <Link to="/register" className="text-primary font-bold hover:underline ml-1">Create Agency</Link>
+         </div>
+      </div>
     </div>
   );
 };

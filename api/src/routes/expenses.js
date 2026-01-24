@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
+import { auditLog } from "../utils/auditLogger.js";
 import { z } from "zod";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
@@ -194,7 +195,7 @@ expenseRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     try {
-      const agencyId = req.user.agencyId;
+      const agencyId = req.agencyId;
       const expense = await prisma.expense.findFirst({
         where: {
           id: req.params.id,

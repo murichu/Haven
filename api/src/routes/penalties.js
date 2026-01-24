@@ -11,7 +11,7 @@ penaltyRouter.use(requireAuth);
 // GET all penalties for the agency
 penaltyRouter.get("/", async (req, res) => {
   try {
-    const agencyId = req.user.agencyId;
+    const agencyId = req.agencyId;
     const penalties = await prisma.penalty.findMany({
       where: { agencyId },
       include: {
@@ -20,7 +20,7 @@ penaltyRouter.get("/", async (req, res) => {
             lease: {
               include: {
                 tenant: { select: { name: true, email: true, phone: true } },
-                property: { select: { name: true } },
+                property: { select: { title: true } },
                 unit: { select: { unitNumber: true } }
               }
             }
@@ -31,17 +31,17 @@ penaltyRouter.get("/", async (req, res) => {
             lease: {
               include: {
                 tenant: { select: { name: true, email: true, phone: true } },
-                property: { select: { name: true } },
+                property: { select: { title: true } },
                 unit: { select: { unitNumber: true } }
               }
             }
           }
         }
       },
-      orderBy: { computedAt: 'desc' }
+      orderBy: { createdAt: 'desc' }
     });
     
-    res.json({ success: true, data: penalties, count: penalties.length });
+    res.json(penalties); // Return array directly for frontend compatibility
   } catch (error) {
     console.error('Error fetching penalties:', error);
     res.status(500).json({ error: "Failed to fetch penalties" });

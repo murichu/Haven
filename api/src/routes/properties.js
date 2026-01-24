@@ -15,8 +15,38 @@ import {
 } from "../middleware/centralizedErrorHandler.js";
 import logger from "../utils/logger.js";
 import { successResponse, errorResponse } from "../utils/responses.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const propertyRouter = Router();
+
+// Public route for listings (placed before requireAuth)
+propertyRouter.get("/listings", async (req, res) => {
+  try {
+    const properties = await prisma.property.findMany({
+      where: { status: "AVAILABLE" },
+      include: {
+        units: { 
+          where: { status: "VACANT" },
+          select: {
+            id: true,
+            unitNumber: true,
+            rentAmount: true,
+            type: true,
+            bedrooms: true,
+            bathrooms: true
+          }
+        }
+      },
+      take: 24,
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: properties });
+  } catch (error) {
+    logger.error("Public listings fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch public listings" });
+  }
+});
+
 propertyRouter.use(requireAuth);
 propertyRouter.use(queryTimeMiddleware);
 propertyRouter.use(paginate({ maxLimit: 100, memoryLimit: 100 * 1024 * 1024 })); // 100MB memory limit
@@ -141,8 +171,16 @@ propertyRouter.post(
       const created = await prisma.property.create({
         data: {
           ...parsed.data,
-          agencyId: req.user.agencyId,
+          agencyId: req.agencyId,
         },
+      });
+
+      await auditLog(req, {
+        action: "CREATE",
+        entityType: "Property",
+        entityId: created.id,
+        entityName: created.title,
+        description: `New property registered: ${created.title}`
       });
 
       return successResponse(res, created, "Property created", 201);
@@ -235,6 +273,14 @@ propertyRouter.put(
         data: parsed.data,
       });
 
+      await auditLog(req, {
+        action: "UPDATE",
+        entityType: "Property",
+        entityId: updated.id,
+        entityName: updated.title,
+        description: `Property details updated: ${updated.title}`
+      });
+
       return successResponse(res, updated, "Property updated");
     } catch (error) {
       logger.error("Error updating property:", error);
@@ -259,6 +305,15 @@ propertyRouter.delete(
       if (!existing) throw new NotFoundError("Property not found");
 
       await prisma.property.delete({ where: { id: existing.id } });
+
+      await auditLog(req, {
+        action: "DELETE",
+        entityType: "Property",
+        entityId: existing.id,
+        entityName: existing.title,
+        description: `Property removed from system: ${existing.title}`
+      });
+
       return successResponse(res, null, "Property deleted", 204);
     } catch (error) {
       logger.error("Error deleting property:", error);

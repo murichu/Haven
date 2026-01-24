@@ -1,498 +1,192 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Building2, 
-  Search, 
-  MapPin, 
   Shield, 
   Zap, 
-  Users, 
-  TrendingUp, 
-  CheckCircle,
+  BarChart3, 
+  MessageSquare, 
   ArrowRight,
-  Star,
-  Phone,
-  Mail,
-  Menu,
-  X
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent } from '@/components/ui/card'
+  CheckCircle2,
+  Globe,
+  Smartphone,
+  Users
+} from 'lucide-react';
 
 const LandingPage = () => {
-  const navigate = useNavigate()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-
-  const handleSearch = (e) => {
-    e.preventDefault()
-    navigate(`/properties?search=${encodeURIComponent(searchQuery)}`)
-  }
-
-  const features = [
-    {
-      icon: <Building2 className="h-8 w-8 text-blue-600" />,
-      title: "Property Management",
-      description: "Manage all your properties, units, and tenants in one place with powerful tools."
-    },
-    {
-      icon: <Zap className="h-8 w-8 text-yellow-600" />,
-      title: "Automated Billing",
-      description: "Automatic invoice generation, payment tracking, and rent reminders."
-    },
-    {
-      icon: <Shield className="h-8 w-8 text-green-600" />,
-      title: "Secure Payments",
-      description: "M-Pesa integration, bank transfers, and multiple payment methods supported."
-    },
-    {
-      icon: <Users className="h-8 w-8 text-purple-600" />,
-      title: "Tenant Portal",
-      description: "Self-service portal for tenants to pay rent, submit requests, and communicate."
-    },
-    {
-      icon: <TrendingUp className="h-8 w-8 text-red-600" />,
-      title: "Analytics & Reports",
-      description: "Real-time insights, revenue forecasting, and comprehensive reporting."
-    },
-    {
-      icon: <MapPin className="h-8 w-8 text-indigo-600" />,
-      title: "Location Tracking",
-      description: "Interactive maps, property locations, and neighborhood information."
-    }
-  ]
-
-  const stats = [
-    { value: "10,000+", label: "Properties Managed" },
-    { value: "50,000+", label: "Happy Tenants" },
-    { value: "KES 5B+", label: "Rent Collected" },
-    { value: "99.9%", label: "Uptime" }
-  ]
-
-  const testimonials = [
-    {
-      name: "John Kamau",
-      role: "Property Owner",
-      image: "https://ui-avatars.com/api/?name=John+Kamau&background=0D8ABC&color=fff",
-      content: "Haven has transformed how I manage my properties. Everything is automated and I can track everything from my phone!"
-    },
-    {
-      name: "Sarah Wanjiku",
-      role: "Real Estate Agent",
-      image: "https://ui-avatars.com/api/?name=Sarah+Wanjiku&background=6366f1&color=fff",
-      content: "The best property management system in Kenya. M-Pesa integration is seamless and tenants love the self-service portal."
-    },
-    {
-      name: "David Ochieng",
-      role: "Property Manager",
-      image: "https://ui-avatars.com/api/?name=David+Ochieng&background=10b981&color=fff",
-      content: "I manage 50+ properties with ease. The automated billing and reporting features save me hours every week."
-    }
-  ]
-
-  const pricingPlans = [
-    {
-      name: "Starter",
-      price: "KES 2,999",
-      period: "/month",
-      description: "Perfect for individual landlords",
-      features: [
-        "Up to 10 properties",
-        "Unlimited tenants",
-        "M-Pesa payments",
-        "Basic reports",
-        "Email support"
-      ],
-      popular: false
-    },
-    {
-      name: "Professional",
-      price: "KES 9,999",
-      period: "/month",
-      description: "For growing property portfolios",
-      features: [
-        "Up to 50 properties",
-        "Unlimited tenants",
-        "All payment methods",
-        "Advanced analytics",
-        "Priority support",
-        "Custom branding"
-      ],
-      popular: true
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      period: "",
-      description: "For large property management firms",
-      features: [
-        "Unlimited properties",
-        "Unlimited tenants",
-        "White-label solution",
-        "API access",
-        "Dedicated support",
-        "Custom integrations"
-      ],
-      popular: false
-    }
-  ]
-
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white font-inter selection:bg-primary/20 selection:text-primary">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-b z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-8 w-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">Haven</span>
+      <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2 group cursor-pointer">
+            <div className="w-10 h-10 bg-gray-900 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110">
+               <Building2 className="text-white" size={20} />
             </div>
+            <span className="text-xl font-black tracking-tighter text-gray-900 uppercase">Haven</span>
+          </div>
+          
+          <div className="hidden md:flex items-center gap-8">
+            <a href="#features" className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-widest">Features</a>
+            <a href="#pricing" className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-widest">Pricing</a>
+            <Link to="/public-properties" className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-widest">Listings</Link>
+          </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-gray-600 hover:text-gray-900">Features</a>
-              <a href="#pricing" className="text-gray-600 hover:text-gray-900">Pricing</a>
-              <a href="#testimonials" className="text-gray-600 hover:text-gray-900">Testimonials</a>
-              <a href="#contact" className="text-gray-600 hover:text-gray-900">Contact</a>
-              <Button variant="outline" onClick={() => navigate('/login')}>
-                Sign In
-              </Button>
-              <Button onClick={() => navigate('/register')}>
-                Get Started
-              </Button>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+          <div className="flex items-center gap-4">
+            <Link to="/login" className="text-sm font-black text-gray-400 hover:text-gray-900 transition-all uppercase tracking-widest px-4">Sign In</Link>
+            <Link to="/register" className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-105 transition-all">Get Started</Link>
           </div>
         </div>
-
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t bg-white">
-            <div className="px-4 py-4 space-y-3">
-              <a href="#features" className="block text-gray-600 hover:text-gray-900">Features</a>
-              <a href="#pricing" className="block text-gray-600 hover:text-gray-900">Pricing</a>
-              <a href="#testimonials" className="block text-gray-600 hover:text-gray-900">Testimonials</a>
-              <a href="#contact" className="block text-gray-600 hover:text-gray-900">Contact</a>
-              <Button variant="outline" className="w-full" onClick={() => navigate('/login')}>
-                Sign In
-              </Button>
-              <Button className="w-full" onClick={() => navigate('/register')}>
-                Get Started
-              </Button>
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-              Property Management
-              <span className="text-blue-600"> Made Simple</span>
+      <section className="pt-40 pb-20 px-6 overflow-hidden">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+          <div className="relative z-10 animate-in fade-in slide-in-from-left-8 duration-700">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/5 rounded-full text-primary font-black uppercase text-[10px] tracking-[0.2em] mb-8">
+              <Zap size={14} />
+              Reimagining Property Management
+            </div>
+            <h1 className="text-7xl font-black text-gray-900 tracking-tighter leading-[0.95] mb-8">
+              The Enterprise <br />
+              <span className="text-primary italic">Engine</span> for <br />
+              Modern Real Estate.
             </h1>
-            <p className="text-xl text-gray-600 mb-8">
-              The most powerful property management system in Kenya. Manage properties, collect rent, and grow your business with ease.
+            <p className="text-xl text-gray-500 font-medium leading-relaxed max-w-lg mb-10">
+              Automate rent collection, manage multi-state portfolios, and scale your agency with Haven's premium management infrastructure.
             </p>
-
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="max-w-2xl mx-auto mb-8">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search properties by location, type, or name..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 h-14 text-lg"
-                  />
-                </div>
-                <Button type="submit" size="lg" className="h-14 px-8">
-                  Search
-                </Button>
-              </div>
-            </form>
-
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button size="lg" onClick={() => navigate('/register')} className="h-14 px-8">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => navigate('/properties')} className="h-14 px-8">
-                Browse Properties
-              </Button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link to="/register" className="bg-gray-900 text-white px-8 py-5 rounded-[2rem] font-black uppercase text-sm tracking-widest shadow-2xl flex items-center justify-center gap-3 hover:scale-105 transition-all">
+                Launch Dashboard
+                <ArrowRight size={20} strokeWidth={3} />
+              </Link>
+              <Link to="/public-properties" className="bg-white text-gray-900 border border-gray-100 px-8 py-5 rounded-[2rem] font-black uppercase text-sm tracking-widest shadow-soft flex items-center justify-center hover:bg-gray-50 transition-all">
+                Browse Listings
+              </Link>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                  {stat.value}
+          <div className="relative animate-in fade-in zoom-in duration-1000 delay-200">
+            <div className="absolute -top-20 -right-20 w-96 h-96 bg-primary/10 rounded-full blur-[120px]" />
+            <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-blue-100/50 rounded-full blur-[100px]" />
+            <div className="bg-white rounded-[3rem] p-4 shadow-2xl border border-gray-100 relative group overflow-hidden">
+               <img 
+                 src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80" 
+                 alt="Dashboard Preview" 
+                 className="rounded-[2.5rem] w-full h-[500px] object-cover transition-transform duration-700 group-hover:scale-105"
+               />
+               <div className="absolute top-10 right-10 bg-white/90 backdrop-blur p-6 rounded-3xl shadow-xl border border-white/50 animate-bounce">
+                  <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Collection Rate</p>
+                  <p className="text-3xl font-black text-gray-900">98.4%</p>
+               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section className="bg-gray-50 py-20 px-6 border-y border-gray-100">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between gap-10">
+          {[
+            { label: 'Units under management', value: '15,000+' },
+            { label: 'Active Agencies', value: '450+' },
+            { label: 'Collection Volume', value: '$85.2M' },
+            { label: 'Client Retention', value: '99.9%' }
+          ].map((stat, i) => (
+            <div key={i} className="flex-1 min-w-[200px]">
+              <p className="text-4xl font-black text-gray-900 tracking-tighter mb-1">{stat.value}</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="py-32 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center max-w-2xl mx-auto mb-20">
+            <h2 className="text-4xl font-black text-gray-900 tracking-tight mb-4">Enterprise Architecture.</h2>
+            <p className="text-gray-500 font-medium">Everything you need to run a high-performing real estate business in one unified vertical cloud.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { 
+                icon: Shield, 
+                title: 'Compliance First', 
+                desc: 'Full audit trails, data isolation, and RBAC security built into every transaction.' 
+              },
+              { 
+                icon: Zap, 
+                title: 'Smart Automation', 
+                desc: 'Automated late fee calculation and recurring invoicing triggers every single day.' 
+              },
+              { 
+                icon: BarChart3, 
+                title: 'Vertical Analytics', 
+                desc: 'Deep insights into occupancy trends, revenue health, and agency performance.' 
+              }
+            ].map((feature, i) => (
+              <div key={i} className="bg-white p-12 rounded-[3rem] shadow-soft border border-gray-50 hover:shadow-xl hover:-translate-y-2 transition-all group">
+                <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-primary mb-8 group-hover:bg-primary group-hover:text-white transition-colors shadow-inner">
+                  <feature.icon size={24} />
                 </div>
-                <div className="text-gray-600">{stat.label}</div>
+                <h3 className="text-xl font-black text-gray-900 mb-4">{feature.title}</h3>
+                <p className="text-gray-500 text-sm font-medium leading-relaxed">{feature.desc}</p>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Everything You Need to Manage Properties
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Powerful features designed for property owners, managers, and real estate professionals.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <Card key={index} className="border-2 hover:border-blue-500 transition-colors">
-                <CardContent className="p-6">
-                  <div className="mb-4">{feature.icon}</div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-600">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Loved by Property Owners Across Kenya
-            </h2>
-            <p className="text-xl text-gray-600">
-              See what our customers have to say about Haven
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <Card key={index}>
-                <CardContent className="p-6">
-                  <div className="flex gap-1 mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                    ))}
-                  </div>
-                  <p className="text-gray-600 mb-6">{testimonial.content}</p>
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={testimonial.image}
-                      alt={testimonial.name}
-                      className="h-12 w-12 rounded-full"
-                    />
-                    <div>
-                      <div className="font-semibold text-gray-900">{testimonial.name}</div>
-                      <div className="text-sm text-gray-600">{testimonial.role}</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Simple, Transparent Pricing
-            </h2>
-            <p className="text-xl text-gray-600">
-              Choose the plan that's right for your business
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {pricingPlans.map((plan, index) => (
-              <Card
-                key={index}
-                className={`relative ${
-                  plan.popular ? 'border-2 border-blue-600 shadow-xl' : ''
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold">
-                      Most Popular
-                    </span>
-                  </div>
-                )}
-                <CardContent className="p-8">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                  <p className="text-gray-600 mb-6">{plan.description}</p>
-                  <div className="mb-6">
-                    <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
-                    <span className="text-gray-600">{plan.period}</span>
-                  </div>
-                  <ul className="space-y-3 mb-8">
-                    {plan.features.map((feature, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-600">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    className="w-full"
-                    variant={plan.popular ? 'default' : 'outline'}
-                    onClick={() => navigate('/register')}
-                  >
-                    Get Started
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-blue-600">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-white mb-4">
-            Ready to Transform Your Property Management?
-          </h2>
-          <p className="text-xl text-blue-100 mb-8">
-            Join thousands of property owners who trust Haven to manage their properties.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Button
-              size="lg"
-              variant="secondary"
-              onClick={() => navigate('/register')}
-              className="h-14 px-8"
-            >
-              Start Free Trial
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => navigate('/properties')}
-              className="h-14 px-8 bg-transparent text-white border-white hover:bg-white/10"
-            >
-              Browse Properties
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Contact Section */}
-      <section id="contact" className="py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Get in Touch</h2>
-            <p className="text-xl text-gray-600">
-              Have questions? We're here to help!
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Phone className="h-8 w-8 text-blue-600 mx-auto mb-4" />
-                <h3 className="font-semibold text-gray-900 mb-2">Phone</h3>
-                <p className="text-gray-600">+254 700 000 000</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Mail className="h-8 w-8 text-blue-600 mx-auto mb-4" />
-                <h3 className="font-semibold text-gray-900 mb-2">Email</h3>
-                <p className="text-gray-600">support@haven.co.ke</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6 text-center">
-                <MapPin className="h-8 w-8 text-blue-600 mx-auto mb-4" />
-                <h3 className="font-semibold text-gray-900 mb-2">Office</h3>
-                <p className="text-gray-600">Nairobi, Kenya</p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Building2 className="h-8 w-8 text-blue-400" />
-                <span className="text-2xl font-bold">Haven</span>
+      <footer className="bg-gray-900 text-white pt-32 pb-20 px-6 overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/20 rounded-full blur-[150px] -translate-y-1/2 translate-x-1/2" />
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-20 mb-20">
+            <div className="col-span-2">
+              <div className="flex items-center gap-2 mb-8">
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center">
+                   <Building2 className="text-gray-900" size={24} />
+                </div>
+                <span className="text-2xl font-black tracking-tighter uppercase">Haven</span>
               </div>
-              <p className="text-gray-400">
-                The most powerful property management system in Kenya.
-              </p>
+              <h4 className="text-4xl font-black tracking-tight max-w-md mb-8">Ready to transform your property operations?</h4>
+              <Link to="/register" className="inline-flex bg-primary text-white px-8 py-5 rounded-[2rem] font-black uppercase text-sm tracking-widest shadow-2xl hover:scale-105 transition-all">
+                Start Free Trial
+              </Link>
             </div>
-
+            
             <div>
-              <h3 className="font-semibold mb-4">Product</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#features" className="hover:text-white">Features</a></li>
-                <li><a href="#pricing" className="hover:text-white">Pricing</a></li>
-                <li><a href="#" className="hover:text-white">Security</a></li>
-                <li><a href="#" className="hover:text-white">Updates</a></li>
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-8">Navigation</p>
+              <ul className="space-y-4">
+                <li><a href="#" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">Documentation</a></li>
+                <li><a href="#" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">API Reference</a></li>
+                <li><a href="#" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">Success Stories</a></li>
               </ul>
             </div>
 
             <div>
-              <h3 className="font-semibold mb-4">Company</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white">About</a></li>
-                <li><a href="#" className="hover:text-white">Blog</a></li>
-                <li><a href="#" className="hover:text-white">Careers</a></li>
-                <li><a href="#contact" className="hover:text-white">Contact</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-4">Legal</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white">Privacy</a></li>
-                <li><a href="#" className="hover:text-white">Terms</a></li>
-                <li><a href="#" className="hover:text-white">Cookie Policy</a></li>
-                <li><a href="#" className="hover:text-white">Licenses</a></li>
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-8">Connect</p>
+              <ul className="space-y-4">
+                <li><a href="#" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">LinkedIn</a></li>
+                <li><a href="#" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">Twitter (X)</a></li>
+                <li><a href="#" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">Instagram</a></li>
               </ul>
             </div>
           </div>
-
-          <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 Haven. All rights reserved.</p>
+          
+          <div className="pt-20 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
+            <p className="text-xs font-bold text-white/30 tracking-widest uppercase">© 2026 Haven Soft UI Engine. All rights reserved.</p>
+            <div className="flex gap-8">
+              <a href="#" className="text-xs font-bold text-white/30 hover:text-white transition-colors uppercase tracking-widest">Privacy Policy</a>
+              <a href="#" className="text-xs font-bold text-white/30 hover:text-white transition-colors uppercase tracking-widest">Service Terms</a>
+            </div>
           </div>
         </div>
       </footer>
     </div>
-  )
-}
+  );
+};
 
-export default LandingPage
+export default LandingPage;

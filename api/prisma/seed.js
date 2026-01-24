@@ -4,455 +4,299 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting seed...");
+  console.log("🌱 Starting expanded seeding...");
 
-  // Clear existing data (optional - comment out if you want to keep existing data)
-  console.log("🗑️  Clearing existing data...");
-  await prisma.payment.deleteMany();
-  await prisma.invoice.deleteMany();
-  await prisma.lease.deleteMany();
-  await prisma.unit.deleteMany();
-  await prisma.tenant.deleteMany();
-  await prisma.property.deleteMany();
-  await prisma.mpesaTransaction.deleteMany();
-  await prisma.pesapalTransaction.deleteMany();
-  await prisma.refreshToken.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.agency.deleteMany();
+  // Reset existing data
+  console.log("🗑️  Cleaning database...");
+  
+  const safeDelete = async (modelName) => {
+    if (prisma[modelName]) {
+        console.log(`- Deleting ${modelName}...`);
+        await prisma[modelName].deleteMany();
+    } else {
+        console.warn(`- Model ${modelName} not found in client, skipping.`);
+    }
+  };
 
-  // Create Agencies
-  console.log("🏢 Creating agencies...");
-  const agency1 = await prisma.agency.create({
-    data: {
-      name: "Acme Realty",
-      invoiceDayOfMonth: 28,
-      dueDayOfMonth: 5,
-    },
-  });
+  const modelsToClear = [
+    "auditLog", "expense", "penalty", "notice", "vacateNotice", 
+    "caretakerPayment", "caretaker", "agent", "payment", "invoice", 
+    "mpesaTransaction", "pesapalTransaction", "lease", "unit", 
+    "tenant", "property", "refreshToken", "user", "agency"
+  ];
 
-  const agency2 = await prisma.agency.create({
-    data: {
-      name: "Prime Properties Ltd",
-      invoiceDayOfMonth: 25,
-      dueDayOfMonth: 1,
-    },
-  });
+  for (const model of modelsToClear) {
+      await safeDelete(model);
+  }
 
-  // Create Users
-  console.log("👥 Creating users...");
   const passwordHash = await bcrypt.hash("password123", 10);
 
-  const adminUser = await prisma.user.create({
-    data: {
-      email: "admin@acme.com",
-      name: "Admin User",
-      passwordHash,
-      role: "ADMIN",
-      agencyId: agency1.id,
-      emailVerified: true,
-    },
-  });
+  // 1. Create 4 Agencies
+  console.log("🏢 Creating 4 Agencies...");
+  const agencyNames = ["Haven Premier Management", "Skyline Realty Group", "Urban Living Estates", "Heritage Property Hub"];
+  const agencies = [];
+  for (const name of agencyNames) {
+    const agency = await prisma.agency.create({
+      data: {
+        name,
+        invoiceDayOfMonth: 28,
+        dueDayOfMonth: 5,
+      },
+    });
+    agencies.push(agency);
+  }
 
-  const managerUser = await prisma.user.create({
-    data: {
-      email: "manager@acme.com",
-      name: "Manager Smith",
-      passwordHash,
-      role: "USER",
-      agencyId: agency1.id,
-      emailVerified: true,
-    },
-  });
+  // 2. Create 12 Users (3 per agency)
+  console.log("👤 Creating 12 Users...");
+  const users = [];
+  for (const agency of agencies) {
+    const agencySlug = agency.name.toLowerCase().replace(/\s/g, '');
+    const roles = ["ADMIN", "USER", "USER"];
+    for (let i = 0; i < 3; i++) {
+        const user = await prisma.user.create({
+            data: {
+              email: `${roles[i].toLowerCase()}${i}@${agencySlug}.com`,
+              name: `${agency.name} ${roles[i]} ${i+1}`,
+              passwordHash,
+              role: roles[i],
+              agencyId: agency.id,
+              emailVerified: true,
+            },
+          });
+          users.push(user);
+    }
+  }
 
-  const agentUser = await prisma.user.create({
-    data: {
-      email: "agent@prime.com",
-      name: "Agent Johnson",
-      passwordHash,
-      role: "USER",
-      agencyId: agency2.id,
-      emailVerified: true,
-    },
-  });
+  // Helper for random pick
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 
-  // Create Properties
-  console.log("🏠 Creating properties...");
-  const property1 = await prisma.property.create({
-    data: {
-      title: "Sunset Apartments",
-      address: "123 Main Street",
-      city: "Nairobi",
-      state: "Nairobi County",
-      zip: "00100",
-      bedrooms: 2,
-      bathrooms: 2,
-      sizeSqFt: 1200,
-      rentAmount: 50000,
-      status: "AVAILABLE",
-      type: "TWO_BEDROOM",
-      agencyId: agency1.id,
-    },
-  });
+  // 3. Create 20 Properties (5 per agency)
+  console.log("🏠 Creating 20 Properties...");
+  const counties = ["Nairobi", "Mombasa", "Kisumu", "Nakuru", "Kiambu"];
+  const propertyTitles = ["Sunset Heights", "Green Valley", "The Landmark", "Oak Residency", "Crystal Plaza", "Heritage Court", "Zion Towers", "Aspen Suites", "Marina Bay", "Palms Residency"];
+  const properties = [];
+  for (const agency of agencies) {
+    for (let i = 0; i < 5; i++) {
+        const prop = await prisma.property.create({
+            data: {
+                title: `${pick(propertyTitles)} Phase ${i+1}`,
+                address: `${randomInt(100, 999)} ${pick(["Main St", "Ring Rd", "Avenue", "Way"])}`,
+                city: pick(counties),
+                state: `${pick(counties)} County`,
+                zip: `00${randomInt(100, 900)}`,
+                bedrooms: randomInt(1, 4),
+                bathrooms: randomInt(1, 4),
+                sizeSqFt: randomInt(500, 2500),
+                rentAmount: randomInt(20000, 150000),
+                status: "AVAILABLE",
+                type: pick(["TWO_BEDROOM", "THREE_BEDROOM", "ONE_BEDROOM", "MAISONETTE", "TOWNHOUSE", "VILLA"]),
+                agencyId: agency.id,
+            }
+        });
+        properties.push(prop);
+    }
+  }
 
-  const property2 = await prisma.property.create({
-    data: {
-      title: "Green Valley Residences",
-      address: "456 Oak Avenue",
-      city: "Mombasa",
-      state: "Mombasa County",
-      zip: "80100",
-      bedrooms: 3,
-      bathrooms: 2.5,
-      sizeSqFt: 1500,
-      rentAmount: 75000,
-      status: "AVAILABLE",
-      type: "THREE_BEDROOM",
-      agencyId: agency1.id,
-    },
-  });
+  // 4. Create 60 Units (3 per property)
+  console.log("🚪 Creating 60 Units...");
+  const units = [];
+  for (const property of properties) {
+    for (let i = 1; i <= 3; i++) {
+        const unit = await prisma.unit.create({
+            data: {
+                propertyId: property.id,
+                unitNumber: `${pick(["A", "B", "C"])}${i}0${randomInt(1, 9)}`,
+                type: property.type,
+                bedrooms: property.bedrooms,
+                bathrooms: property.bathrooms,
+                sizeSqFt: property.sizeSqFt,
+                rentAmount: property.rentAmount,
+                status: pick(["VACANT", "OCCUPIED", "MAINTENANCE"]),
+            }
+        });
+        units.push(unit);
+    }
+  }
 
-  const property3 = await prisma.property.create({
-    data: {
-      title: "Downtown Plaza",
-      address: "789 Business District",
-      city: "Nairobi",
-      state: "Nairobi County",
-      zip: "00200",
-      bedrooms: 1,
-      bathrooms: 1,
-      sizeSqFt: 600,
-      rentAmount: 35000,
-      status: "OCCUPIED",
-      type: "ONE_BEDROOM",
-      agencyId: agency2.id,
-    },
-  });
+  // 5. Create 40 Tenants
+  console.log("👨‍👩‍👧‍👦 Creating 40 Tenants...");
+  const firstNames = ["James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", "William", "Elizabeth"];
+  const lastNames = ["Kamau", "Ochieng", "Wanjiku", "Njoroge", "Musa", "Hassan", "Adu", "Okello", "Moraa", "Chepngetich"];
+  const tenants = [];
+  for (const agency of agencies) {
+    for (let i = 0; i < 10; i++) {
+        const tenant = await prisma.tenant.create({
+            data: {
+                name: `${pick(firstNames)} ${pick(lastNames)}`,
+                email: `${pick(firstNames).toLowerCase()}.${pick(lastNames).toLowerCase()}.${randomInt(10,99)}@example.com`,
+                phone: `+2547${randomInt(10000000, 99999999)}`,
+                agencyId: agency.id,
+                averageRating: randomInt(3, 5),
+                isHighRisk: Math.random() > 0.9,
+            }
+        });
+        tenants.push(tenant);
+    }
+  }
 
-  // Create Units
-  console.log("🚪 Creating units...");
-  const unit1 = await prisma.unit.create({
-    data: {
-      propertyId: property1.id,
-      unitNumber: "A101",
-      type: "TWO_BEDROOM",
-      bedrooms: 2,
-      bathrooms: 2,
-      sizeSqFt: 1200,
-      rentAmount: 50000,
-      status: "OCCUPIED",
-    },
-  });
+  // 6. Create 30 Leases (assign to occupied units)
+  console.log("📄 Creating 30 Leases...");
+  const leases = [];
+  const occupiedUnits = units.filter(u => u.status === "OCCUPIED").slice(0, 30);
+  
+  for (let i = 0; i < occupiedUnits.length; i++) {
+    const unit = occupiedUnits[i];
+    const property = properties.find(p => p.id === unit.propertyId);
+    const agencyTenants = tenants.filter(t => t.agencyId === property.agencyId);
+    if (agencyTenants.length === 0) continue;
+    
+    const tenant = pick(agencyTenants);
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth() - randomInt(1, 6), 1);
+    
+    const lease = await prisma.lease.create({
+        data: {
+            unitId: unit.id,
+            tenantId: tenant.id,
+            agencyId: property.agencyId,
+            propertyId: property.id,
+            startDate: startDate,
+            endDate: new Date(startDate.getFullYear() + 1, startDate.getMonth(), 1),
+            rentAmount: unit.rentAmount,
+            paymentDayOfMonth: randomInt(1, 5),
+        }
+    });
+    leases.push(lease);
+  }
 
-  const unit2 = await prisma.unit.create({
-    data: {
-      propertyId: property1.id,
-      unitNumber: "A102",
-      type: "TWO_BEDROOM",
-      bedrooms: 2,
-      bathrooms: 2,
-      sizeSqFt: 1200,
-      rentAmount: 50000,
-      status: "VACANT",
-    },
-  });
+  // 7. Create 100 Financial Records (Invoices & Payments)
+  console.log("🧾 Creating 100+ Financial Records...");
+  for (const lease of leases) {
+    // Current month invoice
+    const now = new Date();
+    const invoice = await prisma.invoice.create({
+        data: {
+            leaseId: lease.id,
+            agencyId: lease.agencyId,
+            amount: lease.rentAmount,
+            periodYear: now.getFullYear(),
+            periodMonth: now.getMonth() + 1,
+            issuedAt: new Date(now.getFullYear(), now.getMonth(), 28),
+            dueAt: new Date(now.getFullYear(), now.getMonth() + 1, 5),
+            status: pick(["PAID", "PENDING", "OVERDUE"]),
+            totalPaid: 0,
+        }
+    });
 
-  const unit3 = await prisma.unit.create({
-    data: {
-      propertyId: property1.id,
-      unitNumber: "A103",
-      type: "TWO_BEDROOM",
-      bedrooms: 2,
-      bathrooms: 2,
-      sizeSqFt: 1200,
-      rentAmount: 50000,
-      status: "MAINTENANCE",
-    },
-  });
+    if (invoice.status === "PAID") {
+        await prisma.invoice.update({
+            where: { id: invoice.id },
+            data: { totalPaid: lease.rentAmount }
+        });
 
-  const unit4 = await prisma.unit.create({
-    data: {
-      propertyId: property2.id,
-      unitNumber: "B201",
-      type: "THREE_BEDROOM",
-      bedrooms: 3,
-      bathrooms: 2.5,
-      sizeSqFt: 1500,
-      rentAmount: 75000,
-      status: "OCCUPIED",
-    },
-  });
+        await prisma.payment.create({
+            data: {
+                leaseId: lease.id,
+                invoiceId: invoice.id,
+                amount: lease.rentAmount,
+                paidAt: new Date(),
+                method: pick(["MPESA_C2B", "BANK_TRANSFER", "CASH"]),
+                referenceNumber: `REF${randomInt(10000, 99999)}`,
+                agencyId: lease.agencyId,
+            }
+        });
+    }
 
-  const unit5 = await prisma.unit.create({
-    data: {
-      propertyId: property2.id,
-      unitNumber: "B202",
-      type: "THREE_BEDROOM",
-      bedrooms: 3,
-      bathrooms: 2.5,
-      sizeSqFt: 1500,
-      rentAmount: 75000,
-      status: "VACANT",
-    },
-  });
+    // Historical record (2 months ago)
+    const oldDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const oldInvoice = await prisma.invoice.create({
+        data: {
+            leaseId: lease.id,
+            agencyId: lease.agencyId,
+            amount: lease.rentAmount,
+            periodYear: oldDate.getFullYear(),
+            periodMonth: oldDate.getMonth() + 1,
+            issuedAt: new Date(oldDate.getFullYear(), oldDate.getMonth(), 28),
+            dueAt: new Date(oldDate.getFullYear(), oldDate.getMonth() + 1, 5),
+            status: "PAID",
+            totalPaid: lease.rentAmount,
+        }
+    });
 
-  // Create Tenants
-  console.log("👨‍👩‍👧‍👦 Creating tenants...");
-  const tenant1 = await prisma.tenant.create({
-    data: {
-      name: "John Kamau",
-      email: "john.kamau@email.com",
-      phone: "+254712345678",
-      agencyId: agency1.id,
-      averageRating: 4.5,
-      isHighRisk: false,
-    },
-  });
+    await prisma.payment.create({
+        data: {
+            leaseId: lease.id,
+            invoiceId: oldInvoice.id,
+            amount: lease.rentAmount,
+            paidAt: new Date(oldDate.getFullYear(), oldDate.getMonth() + 1, 2),
+            method: "MPESA_C2B",
+            referenceNumber: `HIST${randomInt(10000, 99999)}`,
+            agencyId: lease.agencyId,
+        }
+    });
+  }
 
-  const tenant2 = await prisma.tenant.create({
-    data: {
-      name: "Mary Wanjiku",
-      email: "mary.wanjiku@email.com",
-      phone: "+254723456789",
-      agencyId: agency1.id,
-      averageRating: 5.0,
-      isHighRisk: false,
-    },
-  });
+  // 8. Create 40 Expenses
+  console.log("💸 Creating 40 Expenses...");
+  const expenseCats = ["MAINTENANCE", "UTILITIES", "REPAIRS", "INSURANCE", "TAXES", "SALARIES", "MARKETING"];
+  for (const agency of agencies) {
+    const agencyProps = properties.filter(p => p.agencyId === agency.id);
+    for (let i = 0; i < 10; i++) {
+        await prisma.expense.create({
+            data: {
+                agencyId: agency.id,
+                propertyId: pick(agencyProps)?.id,
+                category: pick(expenseCats),
+                amount: randomInt(500, 15000),
+                description: `Monthly ${pick(expenseCats).toLowerCase()} costs`,
+                expenseDate: new Date(),
+                vendor: "Local Services Ltd",
+                status: "APPROVED",
+            }
+        });
+    }
+  }
 
-  const tenant3 = await prisma.tenant.create({
-    data: {
-      name: "Peter Omondi",
-      email: "peter.omondi@email.com",
-      phone: "+254734567890",
-      agencyId: agency2.id,
-      averageRating: 3.5,
-      isHighRisk: true,
-    },
-  });
+  // 9. Extra UI Entities (Notices/Penalties)
+  console.log("🔔 Creating UI Entities (Notices & Penalties)...");
+  for (const agency of agencies) {
+    await prisma.notice.create({
+        data: {
+            agencyId: agency.id,
+            title: "Scheduled Maintenance Notification",
+            content: "Please be advised of scheduled water maintenance this weekend.",
+            priority: "NORMAL",
+            category: "MAINTENANCE",
+            status: "ACTIVE"
+        }
+    });
 
-  const tenant4 = await prisma.tenant.create({
-    data: {
-      name: "Sarah Njeri",
-      email: "sarah.njeri@email.com",
-      phone: "+254745678901",
-      agencyId: agency1.id,
-      averageRating: 4.8,
-      isHighRisk: false,
-    },
-  });
+    const agencyLeases = leases.filter(l => l.agencyId === agency.id);
+    if (agencyLeases.length > 0) {
+        const lease = pick(agencyLeases);
+        await prisma.penalty.create({
+            data: {
+                agencyId: agency.id,
+                type: "LATE_PAYMENT",
+                amount: 1500,
+                reason: "Late rent payment for previous cycle",
+                status: "PENDING"
+            }
+        });
+    }
+  }
 
-  // Create Leases
-  console.log("📄 Creating leases...");
-  const now = new Date();
-  const oneYearFromNow = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-
-  const lease1 = await prisma.lease.create({
-    data: {
-      unitId: unit1.id,
-      tenantId: tenant1.id,
-      agencyId: agency1.id,
-      startDate: sixMonthsAgo,
-      endDate: oneYearFromNow,
-      rentAmount: 50000,
-      paymentDayOfMonth: 1,
-    },
-  });
-
-  const lease2 = await prisma.lease.create({
-    data: {
-      unitId: unit4.id,
-      tenantId: tenant2.id,
-      agencyId: agency1.id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 3, 1),
-      endDate: new Date(now.getFullYear() + 1, now.getMonth() - 3, 1),
-      rentAmount: 75000,
-      paymentDayOfMonth: 5,
-    },
-  });
-
-  const lease3 = await prisma.lease.create({
-    data: {
-      propertyId: property3.id,
-      tenantId: tenant3.id,
-      agencyId: agency2.id,
-      startDate: new Date(now.getFullYear(), now.getMonth() - 2, 1),
-      endDate: new Date(now.getFullYear() + 1, now.getMonth() - 2, 1),
-      rentAmount: 35000,
-      paymentDayOfMonth: 1,
-    },
-  });
-
-  // Create Invoices
-  console.log("🧾 Creating invoices...");
-  const invoice1 = await prisma.invoice.create({
-    data: {
-      leaseId: lease1.id,
-      agencyId: agency1.id,
-      amount: 50000,
-      periodYear: now.getFullYear(),
-      periodMonth: now.getMonth() + 1,
-      issuedAt: new Date(now.getFullYear(), now.getMonth(), 28),
-      dueAt: new Date(now.getFullYear(), now.getMonth() + 1, 5),
-      status: "PAID",
-      totalPaid: 50000,
-    },
-  });
-
-  const invoice2 = await prisma.invoice.create({
-    data: {
-      leaseId: lease2.id,
-      agencyId: agency1.id,
-      amount: 75000,
-      periodYear: now.getFullYear(),
-      periodMonth: now.getMonth() + 1,
-      issuedAt: new Date(now.getFullYear(), now.getMonth(), 25),
-      dueAt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
-      status: "PENDING",
-      totalPaid: 0,
-    },
-  });
-
-  const invoice3 = await prisma.invoice.create({
-    data: {
-      leaseId: lease3.id,
-      agencyId: agency2.id,
-      amount: 35000,
-      periodYear: now.getFullYear(),
-      periodMonth: now.getMonth() + 1,
-      issuedAt: new Date(now.getFullYear(), now.getMonth(), 28),
-      dueAt: new Date(now.getFullYear(), now.getMonth() + 1, 5),
-      status: "OVERDUE",
-      totalPaid: 0,
-    },
-  });
-
-  // Create Payments
-  console.log("💰 Creating payments...");
-  const payment1 = await prisma.payment.create({
-    data: {
-      leaseId: lease1.id,
-      invoiceId: invoice1.id,
-      amount: 50000,
-      paidAt: new Date(now.getFullYear(), now.getMonth(), 3),
-      method: "MPESA_C2B",
-      referenceNumber: "QA12XYZ789",
-      notes: "Rent payment for current month",
-      agencyId: agency1.id,
-    },
-  });
-
-  const payment2 = await prisma.payment.create({
-    data: {
-      leaseId: lease1.id,
-      amount: 50000,
-      paidAt: new Date(now.getFullYear(), now.getMonth() - 1, 2),
-      method: "BANK_TRANSFER",
-      referenceNumber: "BNK456789",
-      notes: "Previous month rent",
-      agencyId: agency1.id,
-    },
-  });
-
-  const payment3 = await prisma.payment.create({
-    data: {
-      leaseId: lease2.id,
-      amount: 75000,
-      paidAt: new Date(now.getFullYear(), now.getMonth() - 1, 4),
-      method: "PESAPAL",
-      referenceNumber: "PP789456",
-      notes: "Online payment via PesaPal",
-      agencyId: agency1.id,
-    },
-  });
-
-  // Create M-Pesa Transactions
-  console.log("📱 Creating M-Pesa transactions...");
-  await prisma.mpesaTransaction.create({
-    data: {
-      merchantRequestId: "29115-34620561-1",
-      checkoutRequestId: "ws_CO_191220191020363925",
-      phoneNumber: "254712345678",
-      amount: 50000,
-      accountReference: lease1.id,
-      transactionDesc: "Rent Payment",
-      status: "SUCCESS",
-      responseCode: "0",
-      responseDescription: "The service request is processed successfully.",
-      mpesaReceiptNumber: "QA12XYZ789",
-      transactionDate: new Date(),
-      resultCode: "0",
-      resultDescription: "The service request is processed successfully.",
-      leaseId: lease1.id,
-      agencyId: agency1.id,
-      completedAt: new Date(),
-    },
-  });
-
-  await prisma.mpesaTransaction.create({
-    data: {
-      merchantRequestId: "29115-34620562-1",
-      checkoutRequestId: "ws_CO_191220191020363926",
-      phoneNumber: "254723456789",
-      amount: 75000,
-      accountReference: lease2.id,
-      transactionDesc: "Rent Payment",
-      status: "PENDING",
-      agencyId: agency1.id,
-    },
-  });
-
-  // Create PesaPal Transactions
-  console.log("💳 Creating PesaPal transactions...");
-  await prisma.pesapalTransaction.create({
-    data: {
-      merchantReference: "PP" + Date.now(),
-      orderTrackingId: "d9e0b8c1-4a5f-4c3d-9e2f-1a2b3c4d5e6f",
-      amount: 75000,
-      currency: "KES",
-      description: "Rent Payment - Unit B201",
-      customerEmail: "mary.wanjiku@email.com",
-      customerPhone: "+254723456789",
-      status: "COMPLETED",
-      paymentMethod: "Card",
-      paymentAccount: "****1234",
-      transactionDate: new Date(),
-      confirmationCode: "PP789456",
-      paymentStatusDescription: "Payment completed successfully",
-      leaseId: lease2.id,
-      agencyId: agency1.id,
-      completedAt: new Date(),
-    },
-  });
-
-  await prisma.pesapalTransaction.create({
-    data: {
-      merchantReference: "PP" + (Date.now() + 1),
-      amount: 35000,
-      currency: "KES",
-      description: "Rent Payment - Downtown Plaza",
-      customerEmail: "peter.omondi@email.com",
-      customerPhone: "+254734567890",
-      status: "PENDING",
-      agencyId: agency2.id,
-    },
-  });
-
-  console.log("✅ Seed completed successfully!");
-  console.log("\n📊 Summary:");
-  console.log(`- Agencies: 2`);
-  console.log(`- Users: 3 (admin@acme.com, manager@acme.com, agent@prime.com)`);
-  console.log(`- Properties: 3`);
-  console.log(`- Units: 5`);
-  console.log(`- Tenants: 4`);
-  console.log(`- Leases: 3`);
-  console.log(`- Invoices: 3`);
-  console.log(`- Payments: 3`);
-  console.log(`- M-Pesa Transactions: 2`);
-  console.log(`- PesaPal Transactions: 2`);
-  console.log("\n🔑 Login credentials:");
-  console.log("Email: admin@acme.com");
-  console.log("Password: password123");
+  console.log("✅ Expanded Seeding Completed!");
+  console.log(`- Total Agencies: ${agencies.length}`);
+  console.log(`- Total Users: ${users.length}`);
+  console.log(`- Total Properties: ${properties.length}`);
+  console.log(`- Total Units: ${units.length}`);
+  console.log(`- Total Tenants: ${tenants.length}`);
+  console.log(`- Total Leases: ${leases.length}`);
+  console.log("\n🔑 Test Account Generator:");
+  console.log(`Email: admin0@havenpremiermanagement.com`);
+  console.log(`Password: password123`);
 }
 
 main()

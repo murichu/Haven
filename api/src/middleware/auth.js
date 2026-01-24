@@ -13,13 +13,17 @@ export function requireAuth(req, res, next) {
     if (payload.userType === "agent") {
       req.agent = payload;
       req.userType = "agent";
+      req.agencyId = payload.agencyId; // Explicitly set for all handlers
     } else {
       req.user = payload;
       req.userType = "user";
+      req.agencyId = payload.agencyId; // Explicitly set for all handlers
     }
     
+    if (!req.agencyId) return res.status(401).json({ error: "Unauthorized: Missing agency context" });
+
     next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 }
@@ -35,6 +39,24 @@ export function requireAdmin(req, res, next) {
   }
   
   return res.status(403).json({ error: "Admin or Agent Manager role required" });
+}
+
+/**
+ * Middleware to check granular permissions for Agents
+ * Users with ADMIN role bypass this check
+ */
+export function checkPermission(permission) {
+  return (req, res, next) => {
+    if (req.userType === "user" && req.user?.role === "ADMIN") {
+      return next();
+    }
+    
+    if (req.userType === "agent" && req.agent?.permissions?.includes(permission)) {
+      return next();
+    }
+    
+    return res.status(403).json({ error: `Insufficient permissions: ${permission} required` });
+  };
 }
 
 // Alias for compatibility

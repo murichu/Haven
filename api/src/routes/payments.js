@@ -10,6 +10,7 @@ import {
   getPaymentLockStatus,
   testConcurrentPayments
 } from "../services/paymentConcurrencyHandler.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const paymentRouter = Router();
 
@@ -37,7 +38,7 @@ paymentRouter.get("/", async (req, res) => {
       endDate: req.query.endDate
     };
     
-    const result = await getPaymentsOptimized(req.user.agencyId, options);
+    const result = await getPaymentsOptimized(req.agencyId, options);
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch payments" });
@@ -52,7 +53,7 @@ paymentRouter.post("/", async (req, res) => {
     
     const paymentData = {
       ...parsed.data,
-      agencyId: req.user.agencyId
+      agencyId: req.agencyId
     };
     
     // Use concurrency handler for payment processing
@@ -67,6 +68,13 @@ paymentRouter.post("/", async (req, res) => {
       });
     }
     
+    await auditLog(req, {
+      action: "PAYMENT",
+      entityType: "Payment",
+      entityId: result.id,
+      description: `Payment of KES ${result.amount} received via ${result.method}. Ref: ${result.referenceNumber || 'N/A'}`
+    });
+
     res.status(201).json(result);
   } catch (error) {
     console.error('Payment creation error:', error);
@@ -100,7 +108,7 @@ paymentRouter.get("/:id", async (req, res) => {
     const item = await prisma.payment.findFirst({ 
       where: { 
         id: req.params.id, 
-        agencyId: req.user.agencyId 
+        agencyId: req.agencyId 
       },
       include: {
         lease: {
@@ -155,7 +163,7 @@ paymentRouter.put("/:id", async (req, res) => {
     const existing = await prisma.payment.findFirst({ 
       where: { 
         id: req.params.id, 
-        agencyId: req.user.agencyId 
+        agencyId: req.agencyId 
       } 
     });
     
@@ -164,6 +172,13 @@ paymentRouter.put("/:id", async (req, res) => {
     const updated = await prisma.payment.update({ 
       where: { id: existing.id }, 
       data: parsed.data 
+    });
+
+    await auditLog(req, {
+      action: "UPDATE",
+      entityType: "Payment",
+      entityId: updated.id,
+      description: `Payment record updated. Ref: ${updated.referenceNumber}`
     });
     
     res.json(updated);
@@ -177,13 +192,21 @@ paymentRouter.delete("/:id", async (req, res) => {
     const existing = await prisma.payment.findFirst({ 
       where: { 
         id: req.params.id, 
-        agencyId: req.user.agencyId 
+        agencyId: req.agencyId 
       } 
     });
     
     if (!existing) return res.status(404).json({ error: "Payment not found" });
     
     await prisma.payment.delete({ where: { id: existing.id } });
+
+    await auditLog(req, {
+      action: "DELETE",
+      entityType: "Payment",
+      entityId: existing.id,
+      description: `Payment record deleted. Amount: ${existing.amount}, Ref: ${existing.referenceNumber}`
+    });
+
     res.status(204).end();
   } catch (error) {
     res.status(500).json({ error: "Failed to delete payment" });
@@ -207,7 +230,7 @@ paymentRouter.post("/batch", async (req, res) => {
       if (parsed.success) {
         validatedPayments.push({
           ...parsed.data,
-          agencyId: req.user.agencyId
+          agencyId: req.agencyId
         });
       } else {
         validationErrors.push({
@@ -260,7 +283,7 @@ if (process.env.NODE_ENV !== 'production') {
       // Add agency ID to test payments
       const testData = testPayments.map(payment => ({
         ...payment,
-        agencyId: req.user.agencyId
+        agencyId: req.agencyId
       }));
 
       const testResults = await testConcurrentPayments(testData);

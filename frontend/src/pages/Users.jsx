@@ -1,370 +1,327 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Badge } from '../components/ui/badge'
-import { Users as UsersIcon, Plus, Search, Edit, Trash2, Shield, Mail, Phone } from 'lucide-react'
+import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { UserCog, Plus, Shield, Mail, Phone, MoreVertical, ShieldCheck, Lock, Unlock, UserPlus, Fingerprint, Settings2, Trash2 } from 'lucide-react';
+import StatusBadge from '../components/shared/StatusBadge';
+import EmptyState from '../components/shared/EmptyState';
+import { TableRowSkeleton } from '../components/ui/Skeleton';
+import { useToast } from '../components/ui/Toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
-export default function Users() {
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterRole, setFilterRole] = useState('all')
-  const [showAddModal, setShowAddModal] = useState(false)
+const Users = () => {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deleteId, setDeleteId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phone: '',
-    role: 'USER',
-    password: ''
-  })
+    password: '',
+    role: 'USER'
+  });
+  const { showToast } = useToast();
 
   useEffect(() => {
-    fetchUsers()
-  }, [])
+    fetchUsers();
+  }, []);
 
   const fetchUsers = async () => {
+    setLoading(true);
     try {
-      const response = await axios.get('/users')
-      setUsers(response.data.users || [])
-      setLoading(false)
-    } catch (error) {
-      console.error('Error fetching users:', error)
-      setLoading(false)
+      const response = await api.get('/users');
+      const data = response.data;
+      const usersArray = Array.isArray(data) ? data : (data?.users && Array.isArray(data.users) ? data.users : []);
+      setUsers(usersArray);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load users');
+      showToast('Error fetching user list', 'error');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/users/${deleteId}`);
+      setUsers(users.filter(u => u.id !== deleteId));
+      showToast('User deactivated successfully', 'success');
+      setDeleteId(null);
+    } catch (err) {
+      showToast('Failed to revoke access', 'error');
+    }
+  };
+
+  const handleEdit = (user) => {
+    setEditingUser(user);
+    setFormData({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      password: '' // Keep empty for edits
+    });
+    setShowModal(true);
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
-      await axios.post('/users', formData)
-      setShowAddModal(false)
-      fetchUsers()
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        role: 'user',
-        password: ''
-      })
-    } catch (error) {
-      console.error('Error creating user:', error)
-    }
-  }
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      try {
-        await axios.delete(`/users/${id}`)
-        fetchUsers()
-      } catch (error) {
-        console.error('Error deleting user:', error)
+      if (editingUser) {
+        const response = await api.put(`/users/${editingUser.id}`, formData);
+        setUsers(users.map(u => u.id === editingUser.id ? response.data.user || response.data : u));
+        showToast('User updated successfully', 'success');
+      } else {
+        const response = await api.post('/users', formData);
+        setUsers([...users, response.data.user || response.data]);
+        showToast('Staff member invited successfully', 'success');
       }
+      setShowModal(false);
+      resetForm();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Operation failed', 'error');
     }
-  }
+  };
 
-  const handleToggleStatus = async (id, currentStatus) => {
-    try {
-      await axios.patch(`/users/${id}`, {
-        status: currentStatus === 'active' ? 'inactive' : 'active'
-      })
-      fetchUsers()
-    } catch (error) {
-      console.error('Error updating user status:', error)
-    }
-  }
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = filterRole === 'all' || user.role === filterRole
-    return matchesSearch && matchesRole
-  })
-
-  const getRoleColor = (role) => {
-    switch (role?.toLowerCase()) {
-      case 'admin': return 'bg-red-100 text-red-800'
-      case 'manager': return 'bg-blue-100 text-blue-800'
-      case 'agent': return 'bg-purple-100 text-purple-800'
-      case 'user': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const stats = {
-    total: users.length,
-    active: users.filter(u => u.status === 'active').length,
-    admins: users.filter(u => u.role === 'admin').length,
-    managers: users.filter(u => u.role === 'manager').length
-  }
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>
-  }
+  const resetForm = () => {
+    setEditingUser(null);
+    setFormData({ name: '', email: '', password: '', role: 'USER' });
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-gray-500">Manage system users and permissions</p>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight text-[#1A1A1A]">User Management</h1>
+          <p className="text-gray-500 mt-1">Configure agency staff roles and granular system permissions</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add User
-        </Button>
+        <div className="flex gap-3">
+          <button className="bg-white text-gray-700 px-6 py-3 rounded-2xl font-bold shadow-soft border border-gray-100 hover:bg-gray-50 transition-all flex items-center gap-2">
+            <Lock size={20} className="text-gray-400" />
+            Audit Logs
+          </button>
+          <button 
+            onClick={() => { resetForm(); setShowModal(true); }}
+            className="bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] transition-all flex items-center gap-2"
+          >
+            <UserPlus size={20} strokeWidth={3} />
+            Invite Staff
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Users</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
-              <UsersIcon className="h-8 w-8 text-blue-500" />
+      {/* RBAC Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 text-[#1A1A1A]">
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100">
+          <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-3">Administrators</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black">{users.filter(u => u.role === 'ADMIN').length}</h3>
+            <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+              <ShieldCheck size={20} />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Active</p>
-                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
-              </div>
-              <Shield className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Admins</p>
-                <p className="text-2xl font-bold text-red-600">{stats.admins}</p>
-              </div>
-              <Shield className="h-8 w-8 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Managers</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.managers}</p>
-              </div>
-              <UsersIcon className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="px-4 py-2 border rounded-md"
-            >
-              <option value="all">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="agent">Agent</option>
-              <option value="user">User</option>
-            </select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100">
+          <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-3">Regular Staff</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black">{users.filter(u => u.role === 'USER').length}</h3>
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+              <Fingerprint size={20} />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100 opacity-50">
+          <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-3">API Keys</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black">12</h3>
+            <Settings2 size={20} className="text-gray-400" />
+          </div>
+        </div>
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100">
+          <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-3">Security Score</p>
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-black text-green-600">94%</h3>
+            <div className="w-2 h-2 bg-green-500 rounded-full shadow-lg shadow-green-500/20" />
+          </div>
+        </div>
+      </div>
 
       {/* Users Table */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4">User</th>
-                  <th className="text-left py-3 px-4">Contact</th>
-                  <th className="text-left py-3 px-4">Role</th>
-                  <th className="text-left py-3 px-4">Status</th>
-                  <th className="text-left py-3 px-4">Joined</th>
-                  <th className="text-right py-3 px-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map(user => (
-                  <tr key={user.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <span className="text-blue-600 font-semibold">
-                            {user.name?.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-sm text-gray-500">{user.email}</p>
-                        </div>
+      <div className="bg-white rounded-[2rem] shadow-soft border border-gray-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
+            <tr>
+              <th className="px-8 py-5">Identity</th>
+              <th className="px-8 py-5">Auth Method</th>
+              <th className="px-8 py-5">System Role</th>
+              <th className="px-8 py-5">Status</th>
+              <th className="px-8 py-5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {loading ? (
+              [...Array(5)].map((_, i) => <TableRowSkeleton key={i} />)
+            ) : users.length === 0 ? (
+              <tr>
+                <td colSpan="5">
+                  <EmptyState
+                    icon={UserCog}
+                    title="No users found"
+                    description="Invite your first staff member to help manage your properties."
+                    action={
+                      <button className="bg-primary text-white px-5 py-2 rounded-xl font-bold text-sm">Add Staff</button>
+                    }
+                  />
+                </td>
+              </tr>
+            ) : (
+              users.map((user) => (
+                <tr key={user.id} className="group hover:bg-gray-50/50 transition-all duration-300">
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center font-black text-lg group-hover:scale-110 transition-transform shadow-inner overflow-hidden border-2 border-white">
+                        {user.name?.charAt(0) || 'U'}
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Mail className="h-4 w-4 text-gray-400" />
-                          <span>{user.email}</span>
-                        </div>
-                        {user.phone && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Phone className="h-4 w-4 text-gray-400" />
-                            <span>{user.phone}</span>
-                          </div>
-                        )}
+                      <div>
+                        <p className="font-bold text-gray-900 group-hover:text-primary transition-colors">{user.name}</p>
+                        <p className="text-xs text-gray-400 font-medium lowercase italic">{user.email}</p>
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge className={getRoleColor(user.role)}>
-                        {user.role}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleToggleStatus(user.id, user.status)}
-                        className={user.status === 'active' ? 'text-green-600' : 'text-gray-600'}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-tighter">JWT / OAuth</p>
+                      <p className="text-[10px] text-gray-400 font-medium">Valid until Feb 2026</p>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2">
+                       <Shield size={14} className={user.role === 'ADMIN' ? 'text-primary' : 'text-gray-300'} />
+                       <span className={`text-xs font-black uppercase tracking-widest ${user.role === 'ADMIN' ? 'text-primary' : 'text-gray-600'}`}>{user.role || 'USER'}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <StatusBadge status={user.isActive !== false ? 'Active' : 'Inactive'} />
+                  </td>
+                  <td className="px-8 py-5 text-right whitespace-nowrap">
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEdit(user)}
+                        className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-primary transition-all" 
+                        title="Edit Permissions"
                       >
-                        {user.status === 'active' ? 'Active' : 'Inactive'}
-                      </Button>
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-500">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(user.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                        <Settings2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => setDeleteId(user.id)}
+                        className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-red-600 transition-all font-bold"
+                        title="Revoke Access"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      {filteredUsers.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <UsersIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No users found</p>
-          </CardContent>
-        </Card>
-      )}
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title="Revoke User Access"
+        message="Are you sure you want to deactivate this user? They will immediately lose access to all agency data and tools."
+        confirmText="Revoke Access"
+      />
 
-      {/* Add User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md mx-4">
-            <CardHeader>
-              <CardTitle>Add New User</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Full Name</label>
-                  <Input
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="John Doe"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Email</label>
-                  <Input
-                    required
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="john@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Phone</label>
-                  <Input
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+1234567890"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Role</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md"
-                  >
-                    <option value="user">User</option>
-                    <option value="agent">Agent</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Password</label>
-                  <Input
+      {/* Staff Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl p-10 relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-2">
+              {editingUser ? 'Update Permissions' : 'Invite New Staff'}
+            </h2>
+            <p className="text-gray-500 mb-8 font-medium">
+              {editingUser ? 'Modify credentials and system access level.' : 'Send an invitation to join your management team.'}
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
+                <input 
+                  required
+                  type="text"
+                  placeholder="e.g. Jane Smith"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                <input 
+                  required
+                  type="email"
+                  placeholder="jane@agency.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold"
+                />
+              </div>
+
+              {!editingUser && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Temporary Password</label>
+                  <input 
                     required
                     type="password"
+                    placeholder="••••••••"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="••••••••"
+                    className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold"
                   />
                 </div>
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1">Create User</Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">System Role</label>
+                <select 
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold appearance-none"
+                >
+                  <option value="USER">Staff Member</option>
+                  <option value="ADMIN">Full Administrator</option>
+                </select>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-6 py-4 rounded-2xl font-bold text-gray-400 hover:bg-gray-50 transition-all text-sm uppercase tracking-widest"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-primary text-white px-6 py-4 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all text-sm uppercase tracking-widest"
+                >
+                  {editingUser ? 'Update Staff' : 'Send Invite'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
-  )
-}
+  );
+};
+
+export default Users;
+

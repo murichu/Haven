@@ -1,567 +1,368 @@
-import { useEffect, useState } from "react";
-import {
-  Building2,
-  Search,
-  Plus,
-  DoorOpen,
-  Users,
-  Calendar,
-  DollarSign,
-  Filter,
-  X,
-  Home,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { apiClient } from "../config/api";
+import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { Home, Plus, Search, Filter, MoreVertical, Edit2, Trash2, Building2 } from 'lucide-react';
+import StatusBadge from '../components/shared/StatusBadge';
+import EmptyState from '../components/shared/EmptyState';
+import { TableRowSkeleton } from '../components/ui/Skeleton';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useToast } from '../components/ui/Toast';
 
 const Units = () => {
   const [units, setUnits] = useState([]);
-  const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [editingUnit, setEditingUnit] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterProperty, setFilterProperty] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [deleteId, setDeleteId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [properties, setProperties] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    propertyId: "",
-    unitNumber: "",
-    type: "ONE_BEDROOM",
-    bedrooms: "",
-    bathrooms: "",
-    sizeSqFt: "",
-    rentAmount: "",
-    status: "VACANT",
+    propertyId: '',
+    unitNumber: '',
+    type: 'TWO_BEDROOM',
+    bedrooms: '',
+    bathrooms: '',
+    sizeSqFt: '',
+    rentAmount: ''
   });
+  const { showToast } = useToast();
 
   useEffect(() => {
     fetchUnits();
     fetchProperties();
   }, []);
 
-  const fetchUnits = async () => {
+  const fetchProperties = async () => {
     try {
-      const response = await apiClient.get("/units");
-      const unitsData =
-        response.data?.data?.units ||
-        response.data?.units ||
-        response.data?.data ||
-        response.data ||
-        [];
-      setUnits(Array.isArray(unitsData) ? unitsData : []);
-    } catch (error) {
-      console.error("Error fetching units:", error);
-      setError("Failed to load units");
+      const response = await api.get('/properties');
+      const payload = response.data.data;
+      setProperties(Array.isArray(payload) ? payload : (payload?.properties || []));
+    } catch (err) {
+      console.error('Error fetching properties:', err);
+    }
+  };
+
+  const fetchUnits = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/units');
+      const payload = response.data.data;
+      const unitsArray = Array.isArray(payload) ? payload : (payload?.items || payload?.units || []);
+      setUnits(unitsArray);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load units');
+      showToast('Error loading units', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchProperties = async () => {
+  const handleDelete = async () => {
     try {
-      const response = await apiClient.get("/properties");
-      const propertiesData =
-        response.data?.data?.properties ||
-        response.data?.properties ||
-        response.data?.data ||
-        response.data ||
-        [];
-      setProperties(Array.isArray(propertiesData) ? propertiesData : []);
-    } catch (error) {
-      console.error("Error fetching properties:", error);
+      await api.delete(`/units/${deleteId}`);
+      setUnits(units.filter(u => u.id !== deleteId));
+      showToast('Unit deleted successfully', 'success');
+      setDeleteId(null);
+    } catch (err) {
+      showToast('Failed to delete unit', 'error');
     }
   };
 
-  const handleOpenModal = (unit = null) => {
-    if (unit) {
-      setEditingUnit(unit);
-      setFormData({
-        propertyId: unit.propertyId || "",
-        unitNumber: unit.unitNumber || "",
-        type: unit.type || "ONE_BEDROOM",
-        bedrooms: unit.bedrooms?.toString() || "",
-        bathrooms: unit.bathrooms?.toString() || "",
-        sizeSqFt: unit.sizeSqFt?.toString() || "",
-        rentAmount: unit.rentAmount?.toString() || "",
-        status: unit.status || "VACANT",
-      });
-    } else {
-      setEditingUnit(null);
-      setFormData({
-        propertyId: "",
-        unitNumber: "",
-        type: "ONE_BEDROOM",
-        bedrooms: "",
-        bathrooms: "",
-        sizeSqFt: "",
-        rentAmount: "",
-        status: "VACANT",
-      });
-    }
-    setError("");
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setEditingUnit(null);
-    setFormData({
-      propertyId: "",
-      unitNumber: "",
-      type: "ONE_BEDROOM",
-      bedrooms: "",
-      bathrooms: "",
-      sizeSqFt: "",
-      rentAmount: "",
-      status: "VACANT",
-    });
-    setError("");
-  };
-
-  const handleSubmit = async (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
-    setError("");
-
+    setIsSubmitting(true);
     try {
       const payload = {
         ...formData,
-        bedrooms: formData.bedrooms ? parseInt(formData.bedrooms) : null,
-        bathrooms: formData.bathrooms ? parseFloat(formData.bathrooms) : null,
-        sizeSqFt: formData.sizeSqFt ? parseInt(formData.sizeSqFt) : null,
-        rentAmount: parseInt(formData.rentAmount),
+        bedrooms: parseInt(formData.bedrooms) || 0,
+        bathrooms: parseFloat(formData.bathrooms) || 0,
+        sizeSqFt: parseInt(formData.sizeSqFt) || 0,
+        rentAmount: parseInt(formData.rentAmount) || 0,
       };
-
-      if (editingUnit) {
-        await apiClient.put(`/units/${editingUnit.id}`, payload);
-        setSuccess("Unit updated successfully");
-      } else {
-        await apiClient.post("/units", payload);
-        setSuccess("Unit created successfully");
-      }
-      handleCloseModal();
-      fetchUnits();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error saving unit:", error);
-      setError(error.response?.data?.error || "Failed to save unit");
+      const response = await api.post('/units', payload);
+      await fetchUnits();
+      showToast('Unit created successfully', 'success');
+      setIsModalOpen(false);
+      setFormData({
+        propertyId: '',
+        unitNumber: '',
+        type: 'TWO_BEDROOM',
+        bedrooms: '',
+        bathrooms: '',
+        sizeSqFt: '',
+        rentAmount: ''
+      });
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.message || 'Failed to create unit', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (unit) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete unit "${unit.unitNumber}"?`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await apiClient.delete(`/units/${unit.id}`);
-      setSuccess("Unit deleted successfully");
-      fetchUnits();
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (error) {
-      console.error("Error deleting unit:", error);
-      setError(error.response?.data?.error || "Failed to delete unit");
-      setTimeout(() => setError(""), 3000);
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    const variants = {
-      VACANT: "secondary",
-      OCCUPIED: "default",
-      MAINTENANCE: "destructive",
-    };
-    return variants[status] || "secondary";
-  };
-
-  const filteredUnits = units.filter((unit) => {
-    const property = properties.find((p) => p.id === unit.propertyId);
-    const matchesSearch =
-      unit.unitNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      property?.title?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesProperty =
-      filterProperty === "all" || unit.propertyId === filterProperty;
-    const matchesStatus =
-      filterStatus === "all" || unit.status === filterStatus;
-
-    return matchesSearch && matchesProperty && matchesStatus;
+  const filteredUnits = (Array.isArray(units) ? units : []).filter(unit => {
+    const matchesSearch = unit.unitNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        unit.property?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || unit.status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="text-muted-foreground">Loading units...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8">
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
-          {success}
+    <div className="animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Housing Units</h1>
+          <p className="text-gray-500 font-medium italic">Manage and track individual rental units across your portfolio</p>
         </div>
-      )}
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="group flex items-center gap-2.5 bg-gray-900 text-white px-6 py-3.5 rounded-2xl font-bold hover:bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-gray-200"
+        >
+          <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+          <span>Add Unit</span>
+        </button>
+      </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-            Units
-          </h1>
-          <p className="text-lg text-gray-600">
-            Manage individual property units
-          </p>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span>{filteredUnits.length} units</span>
+      {/* Stats Quick View */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100">
+          <p className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-1">Total Units</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-black text-gray-900">{units.length}</h3>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-          </Button>
-          <Button onClick={() => handleOpenModal()}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Unit
-          </Button>
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100">
+          <p className="text-green-600/70 text-sm font-bold uppercase tracking-wider mb-1">Available</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-black text-green-600">{units.filter(u => u.status === 'VACANT').length}</h3>
+          </div>
+        </div>
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-gray-100">
+          <p className="text-blue-600/70 text-sm font-bold uppercase tracking-wider mb-1">Occupied</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-black text-blue-600">{units.filter(u => u.status === 'OCCUPIED').length}</h3>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="relative max-w-2xl">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search units by number or property..."
+      {/* Filters & Search */}
+      <div className="bg-white rounded-3xl p-4 shadow-soft border border-gray-100 mb-6 flex flex-col lg:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search by unit number or property..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-12 h-12"
+            className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all border-none"
           />
         </div>
-
-        {showFilters && (
-          <Card className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Property
-                </label>
-                <select
-                  value={filterProperty}
-                  onChange={(e) => setFilterProperty(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="all">All Properties</option>
-                  {properties.map((property) => (
-                    <option key={property.id} value={property.id}>
-                      {property.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="all">All Status</option>
-                  <option value="VACANT">Vacant</option>
-                  <option value="OCCUPIED">Occupied</option>
-                  <option value="MAINTENANCE">Maintenance</option>
-                </select>
-              </div>
-            </div>
-          </Card>
-        )}
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredUnits.map((unit) => {
-          const property = properties.find((p) => p.id === unit.propertyId);
-          return (
-            <Card key={unit.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-12 w-12 rounded-full bg-cyan-100 flex items-center justify-center">
-                      <DoorOpen className="h-6 w-6 text-cyan-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">
-                        Unit {unit.unitNumber}
-                      </CardTitle>
-                      <Badge
-                        variant={getStatusBadge(unit.status)}
-                        className="mt-1"
-                      >
-                        {unit.status}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {property && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Home className="h-4 w-4 mr-2" />
-                    {property.title}
-                  </div>
-                )}
-                <div className="flex items-center text-sm text-gray-600">
-                  <Building2 className="h-4 w-4 mr-2" />
-                  {unit.type?.replace(/_/g, " ")}
-                </div>
-                {unit.bedrooms && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Users className="h-4 w-4 mr-2" />
-                    {unit.bedrooms} bed, {unit.bathrooms} bath
-                  </div>
-                )}
-                <div className="flex items-center text-sm text-gray-600">
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  KSh {unit.rentAmount?.toLocaleString()}/month
-                </div>
-                {unit.sizeSqFt && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    {unit.sizeSqFt} sq ft
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenModal(unit)}
-                    className="flex-1"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(unit)}
-                    className="flex-1 text-red-600 hover:text-red-700"
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {filteredUnits.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <DoorOpen className="h-16 w-16 text-gray-400 mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            No units found
-          </h3>
-          <p className="text-gray-600 mb-8">
-            {searchTerm || filterProperty !== "all" || filterStatus !== "all"
-              ? "Try adjusting your filters"
-              : "Get started by adding your first unit"}
-          </p>
-          <Button onClick={() => handleOpenModal()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Unit
-          </Button>
+        <div className="flex gap-2">
+          {['ALL', 'VACANT', 'OCCUPIED', 'MAINTENANCE'].map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-4 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest transition-all ${
+                statusFilter === status
+                  ? 'bg-gray-900 text-white shadow-xl'
+                  : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              {status}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">
-                {editingUnit ? "Edit Unit" : "Add New Unit"}
-              </h2>
-              <button
-                onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600"
+      {/* Table Area */}
+      <div className="bg-white rounded-[2rem] shadow-soft border border-gray-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
+            <tr>
+              <th className="px-8 py-5">Unit Detail</th>
+              <th className="px-8 py-5">Property</th>
+              <th className="px-8 py-5">Specs</th>
+              <th className="px-8 py-5">Monthly Rent</th>
+              <th className="px-8 py-5">Status</th>
+              <th className="px-8 py-5 text-right whitespace-nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {loading ? (
+              [...Array(5)].map((_, i) => <TableRowSkeleton key={i} />)
+            ) : filteredUnits.length === 0 ? (
+              <tr>
+                <td colSpan="6">
+                  <EmptyState
+                    icon={Home}
+                    title="No units match your search"
+                    description="Try adjusting your filters or search terms to find what you're looking for."
+                    action={
+                      <button onClick={() => {setSearchTerm(''); setStatusFilter('ALL')}} className="text-primary font-bold text-sm">Clear all filters</button>
+                    }
+                  />
+                </td>
+              </tr>
+            ) : (
+              filteredUnits.map((unit) => (
+                <tr key={unit.id} className="group hover:bg-gray-50/50 transition-all duration-300">
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-primary/5 text-primary flex items-center justify-center font-black text-lg group-hover:scale-110 transition-transform">
+                        {unit.unitNumber}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">{unit.unitNumber}</p>
+                        <p className="text-xs text-gray-400 font-medium">Floor {unit.floor || 'G'}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                      <Building2 size={16} className="text-gray-400" />
+                      {unit.property?.name || 'Unassigned'}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex gap-3">
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase">{unit.bedrooms || 0} BR</span>
+                      <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold uppercase">{unit.bathrooms || 0} BA</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <p className="text-base font-black text-gray-900">${unit.rentAmount?.toLocaleString()}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Per Month</p>
+                  </td>
+                  <td className="px-8 py-5">
+                    <StatusBadge status={unit.status || 'VACANT'} />
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-primary transition-all">
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => setDeleteId(unit.id)}
+                        className="p-2.5 bg-white text-gray-600 rounded-xl shadow-soft hover:text-red-600 transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Create Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
+          <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-8 pt-8 pb-4 flex justify-between items-center border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-primary/10 text-primary rounded-xl">
+                  <Plus size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-gray-900">Add New Unit</h3>
+                  <p className="text-sm text-gray-500 font-medium">Specify unit details and property</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-2.5 hover:bg-gray-100 rounded-xl transition-colors"
               >
-                <X className="h-5 w-5" />
+                <X size={20} className="text-gray-400" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Property *
-                </label>
-                <select
-                  value={formData.propertyId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, propertyId: e.target.value })
-                  }
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select Property</option>
-                  {properties.map((property) => (
-                    <option key={property.id} value={property.id}>
-                      {property.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <form onSubmit={handleCreate} className="p-8">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 ml-1">Parent Property</label>
+                  <select
+                    required
+                    value={formData.propertyId}
+                    onChange={(e) => setFormData({...formData, propertyId: e.target.value})}
+                    className="w-full bg-gray-50/50 border-2 border-gray-100 rounded-2xl px-5 py-4 focus:border-primary/20 focus:bg-white transition-all outline-none font-bold text-gray-700"
+                  >
+                    <option value="">Select Property</option>
+                    {properties.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Unit Number *
-                </label>
-                <Input
-                  value={formData.unitNumber}
-                  onChange={(e) =>
-                    setFormData({ ...formData, unitNumber: e.target.value })
-                  }
-                  required
-                  placeholder="e.g., A-101"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type *
-                </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, type: e.target.value })
-                  }
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="SINGLE_ROOM">Single Room</option>
-                  <option value="DOUBLE_ROOM">Double Room</option>
-                  <option value="BEDSITTER">Bedsitter</option>
-                  <option value="ONE_BEDROOM">One Bedroom</option>
-                  <option value="TWO_BEDROOM">Two Bedroom</option>
-                  <option value="THREE_BEDROOM">Three Bedroom</option>
-                  <option value="FOUR_BEDROOM">Four Bedroom</option>
-                  <option value="MAISONETTE">Maisonette</option>
-                  <option value="BUNGALOW">Bungalow</option>
-                  <option value="PENTHOUSE">Penthouse</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bedrooms
-                  </label>
-                  <Input
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 ml-1">Unit Number</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. A101"
+                    value={formData.unitNumber}
+                    onChange={(e) => setFormData({...formData, unitNumber: e.target.value})}
+                    className="w-full bg-gray-50/50 border-2 border-gray-100 rounded-2xl px-5 py-4 focus:border-primary/20 focus:bg-white transition-all outline-none font-bold text-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 ml-1">Unit Type</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({...formData, type: e.target.value})}
+                    className="w-full bg-gray-50/50 border-2 border-gray-100 rounded-2xl px-5 py-4 focus:border-primary/20 focus:bg-white transition-all outline-none font-bold text-gray-700"
+                  >
+                    <option value="ONE_BEDROOM">One Bedroom</option>
+                    <option value="TWO_BEDROOM">Two Bedroom</option>
+                    <option value="THREE_BEDROOM">Three Bedroom</option>
+                    <option value="BEDSITTER">Bedsitter</option>
+                    <option value="MAISONETTE">Maisonette</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 ml-1">Rent Amount</label>
+                  <input
+                    required
                     type="number"
+                    placeholder="Monthly rent"
+                    value={formData.rentAmount}
+                    onChange={(e) => setFormData({...formData, rentAmount: e.target.value})}
+                    className="w-full bg-gray-50/50 border-2 border-gray-100 rounded-2xl px-5 py-4 focus:border-primary/20 focus:bg-white transition-all outline-none font-bold text-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2.5 ml-1">Bedrooms</label>
+                  <input
+                    type="number"
+                    placeholder="0"
                     value={formData.bedrooms}
-                    onChange={(e) =>
-                      setFormData({ ...formData, bedrooms: e.target.value })
-                    }
+                    onChange={(e) => setFormData({...formData, bedrooms: e.target.value})}
+                    className="w-full bg-gray-50/50 border-2 border-gray-100 rounded-2xl px-5 py-4 focus:border-primary/20 focus:bg-white transition-all outline-none font-bold text-gray-700"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bathrooms
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    value={formData.bathrooms}
-                    onChange={(e) =>
-                      setFormData({ ...formData, bathrooms: e.target.value })
-                    }
-                  />
+                <div className="col-span-2 pt-4">
+                  <button
+                    disabled={isSubmitting}
+                    type="submit"
+                    className="w-full bg-gray-900 text-white rounded-[1.25rem] py-4 font-black text-lg hover:bg-primary hover:scale-[1.01] active:scale-[0.99] transition-all shadow-xl shadow-gray-200 disabled:opacity-50 flex items-center justify-center gap-3"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="animate-spin" size={20} />
+                    ) : (
+                      <Plus size={20} />
+                    )}
+                    {isSubmitting ? 'Creating Unit...' : 'Create Unit'}
+                  </button>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Size (sq ft)
-                </label>
-                <Input
-                  type="number"
-                  value={formData.sizeSqFt}
-                  onChange={(e) =>
-                    setFormData({ ...formData, sizeSqFt: e.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rent Amount (KSh) *
-                </label>
-                <Input
-                  type="number"
-                  value={formData.rentAmount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, rentAmount: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status *
-                </label>
-                <select
-                  value={formData.status}
-                  onChange={(e) =>
-                    setFormData({ ...formData, status: e.target.value })
-                  }
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="VACANT">Vacant</option>
-                  <option value="OCCUPIED">Occupied</option>
-                  <option value="MAINTENANCE">Maintenance</option>
-                </select>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCloseModal}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  {editingUnit ? "Update" : "Create"}
-                </Button>
               </div>
             </form>
           </div>
@@ -572,3 +373,4 @@ const Units = () => {
 };
 
 export default Units;
+

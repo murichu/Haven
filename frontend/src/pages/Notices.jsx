@@ -1,349 +1,312 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Button } from '../components/ui/button'
-import { Input } from '../components/ui/input'
-import { Badge } from '../components/ui/badge'
-import { Bell, Plus, Search, Send, Eye, Trash2, AlertCircle } from 'lucide-react'
+import React, { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { Megaphone, Plus, Search, Calendar, MapPin, Users, Trash2, Edit2, Volume2, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
+import StatusBadge from '../components/shared/StatusBadge';
+import EmptyState from '../components/shared/EmptyState';
+import { TableRowSkeleton } from '../components/ui/Skeleton';
+import { useToast } from '../components/ui/Toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
-export default function Notices() {
-  const [notices, setNotices] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterType, setFilterType] = useState('all')
-  const [showAddModal, setShowAddModal] = useState(false)
+const Notices = () => {
+  const [notices, setNotices] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [deleteId, setDeleteId] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    message: '',
-    type: 'general',
-    priority: 'normal',
-    recipients: 'all'
-  })
+    content: '',
+    priority: 'NORMAL',
+    category: 'GENERAL',
+    propertyId: '',
+    expiresAt: ''
+  });
+  const { showToast } = useToast();
 
   useEffect(() => {
-    fetchNotices()
-  }, [])
+    fetchNotices();
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      const response = await api.get('/properties');
+      const data = response.data;
+      setProperties(Array.isArray(data) ? data : (data?.properties || []));
+    } catch (err) {
+      console.error('Failed to load properties for notice scope');
+    }
+  };
 
   const fetchNotices = async () => {
+    setLoading(true);
     try {
-      const response = await axios.get('/notices')
-      setNotices(response.data.notices || [])
-      setLoading(false)
-    } catch (error) {
-      console.error('Error fetching notices:', error)
-      setLoading(false)
+      const response = await api.get('/notices');
+      const data = response.data;
+      const noticesArray = Array.isArray(data) ? data : (data?.notices && Array.isArray(data.notices) ? data.notices : []);
+      setNotices(noticesArray);
+    } catch (err) {
+      console.error(err);
+      showToast('Error loading active notices', 'error');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
-      await axios.post('/notices', formData)
-      setShowAddModal(false)
-      fetchNotices()
-      setFormData({
-        title: '',
-        message: '',
-        type: 'general',
-        priority: 'normal',
-        recipients: 'all'
-      })
-    } catch (error) {
-      console.error('Error creating notice:', error)
+      const response = await api.post('/notices', {
+        ...formData,
+        propertyId: formData.propertyId === 'ALL' ? undefined : formData.propertyId,
+        expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : null
+      });
+      setNotices([response.data.notice || response.data, ...notices]);
+      showToast('Notice broadcast successfully', 'success');
+      setShowModal(false);
+      resetForm();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to send notice', 'error');
     }
-  }
+  };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this notice?')) {
-      try {
-        await axios.delete(`/notices/${id}`)
-        fetchNotices()
-      } catch (error) {
-        console.error('Error deleting notice:', error)
-      }
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      content: '',
+      priority: 'NORMAL',
+      category: 'GENERAL',
+      propertyId: 'ALL',
+      expiresAt: ''
+    });
+  };
+
+  const handleDelete = async () => {
+    try {
+      await api.delete(`/notices/${deleteId}`);
+      setNotices(notices.filter(n => n.id !== deleteId));
+      showToast('Notice withdrawn successfully', 'success');
+    } catch (err) {
+       showToast('Failed to withdraw notice', 'error');
     }
-  }
+  };
 
-  const filteredNotices = notices.filter(notice => {
-    const matchesSearch = notice.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         notice.message?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = filterType === 'all' || notice.type === filterType
-    return matchesSearch && matchesType
-  })
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
 
-  const getTypeColor = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'urgent': return 'bg-red-100 text-red-800'
-      case 'maintenance': return 'bg-yellow-100 text-yellow-800'
-      case 'payment': return 'bg-blue-100 text-blue-800'
-      case 'general': return 'bg-gray-100 text-gray-800'
-      case 'event': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getPriorityIcon = (priority) => {
-    if (priority === 'high' || priority === 'urgent') {
-      return <AlertCircle className="h-4 w-4 text-red-500" />
-    }
-    return null
-  }
-
-  const stats = {
-    total: notices.length,
-    urgent: notices.filter(n => n.priority === 'high' || n.priority === 'urgent').length,
-    sent: notices.filter(n => n.status === 'sent').length,
-    draft: notices.filter(n => n.status === 'draft').length
-  }
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>
-  }
+  const filteredNotices = (Array.isArray(notices) ? notices : []).filter(n =>
+    n.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    n.content?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Notices & Announcements</h1>
-          <p className="text-gray-500">Send notices and announcements to tenants</p>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Digital Notices</h1>
+          <p className="text-gray-500 mt-1">Broadcast announcements and important alerts to your residents</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+        <button 
+          onClick={() => { resetForm(); setShowModal(true); }}
+          className="bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] transition-all flex items-center gap-2"
+        >
+          <Megaphone size={20} strokeWidth={3} />
           Create Notice
-        </Button>
+        </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Notices</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
-              <Bell className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Urgent</p>
-                <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
-              </div>
-              <AlertCircle className="h-8 w-8 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Sent</p>
-                <p className="text-2xl font-bold text-green-600">{stats.sent}</p>
-              </div>
-              <Send className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Drafts</p>
-                <p className="text-2xl font-bold text-gray-600">{stats.draft}</p>
-              </div>
-              <Eye className="h-8 w-8 text-gray-500" />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Notice Grid Filter */}
+      <div className="bg-white rounded-3xl p-4 shadow-soft border border-gray-100 mb-8 flex flex-col lg:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search active broadcasts..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-gray-50 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all border-none"
+          />
+        </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search notices..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-4 py-2 border rounded-md"
-            >
-              <option value="all">All Types</option>
-              <option value="general">General</option>
-              <option value="urgent">Urgent</option>
-              <option value="maintenance">Maintenance</option>
-              <option value="payment">Payment</option>
-              <option value="event">Event</option>
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Notices List */}
-      <div className="space-y-4">
-        {filteredNotices.map(notice => (
-          <Card key={notice.id}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    {getPriorityIcon(notice.priority)}
-                    <CardTitle className="text-lg">{notice.title}</CardTitle>
+      {/* Content Area */}
+      {loading ? (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+             <div key={i} className="bg-white p-6 rounded-[2.5rem] shadow-soft border border-gray-50 animate-pulse">
+                <div className="flex gap-4 mb-4">
+                  <div className="w-12 h-12 bg-gray-100 rounded-2xl" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-100 rounded w-1/4" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {new Date(notice.createdAt).toLocaleDateString()} • 
-                    {notice.recipients === 'all' ? ' All Tenants' : ` ${notice.recipientCount} Recipients`}
-                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge className={getTypeColor(notice.type)}>
-                    {notice.type}
-                  </Badge>
-                  {notice.status === 'draft' && (
-                    <Badge variant="outline">Draft</Badge>
-                  )}
-                </div>
+                <div className="h-20 bg-gray-50 rounded-2xl" />
+             </div>
+          ))}
+        </div>
+      ) : filteredNotices.length === 0 ? (
+        <EmptyState
+          icon={Megaphone}
+          title="No live notices"
+          description="Your broadcast history is currently empty. Start by creating an announcement for your properties."
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filteredNotices.map((notice) => (
+            <div key={notice.id} className="bg-white rounded-[2.5rem] p-8 shadow-soft border border-gray-100 group relative hover:shadow-xl transition-all">
+              <div className="flex justify-between items-start mb-6">
+                 <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                      notice.priority === 'HIGH' ? 'bg-red-50 text-red-600' : 'bg-primary/10 text-primary'
+                    }`}>
+                      <Volume2 size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-gray-900 group-hover:text-primary transition-colors">{notice.title}</h3>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
+                        <Clock size={10} />
+                        Expires {formatDate(notice.expiresAt)}
+                      </p>
+                    </div>
+                 </div>
+                 <div className="flex gap-2">
+                    <button 
+                      onClick={() => setDeleteId(notice.id)}
+                      className="p-2.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-700 mb-4">{notice.message}</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  <Eye className="h-4 w-4 mr-1" />
-                  View Details
-                </Button>
-                {notice.status === 'draft' && (
-                  <Button size="sm">
-                    <Send className="h-4 w-4 mr-1" />
-                    Send Now
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(notice.id)}
-                  className="text-red-600 hover:text-red-700 ml-auto"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
-      {filteredNotices.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No notices found</p>
-          </CardContent>
-        </Card>
+              <div className="bg-gray-50/50 p-6 rounded-3xl mb-6">
+                <p className="text-sm text-gray-600 leading-relaxed font-medium">{notice.content}</p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                 <div className="px-4 py-2 bg-gray-100 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase text-gray-500">
+                    <MapPin size={12} strokeWidth={3} />
+                    {notice.property?.name || 'All Properties'}
+                 </div>
+                 <div className="px-4 py-2 bg-gray-100 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase text-gray-500">
+                    <Users size={12} strokeWidth={3} />
+                    Residents Only
+                 </div>
+                 <div className="ml-auto">
+                    <StatusBadge status={notice.status || 'ACTIVE'} />
+                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      {/* Add Notice Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <CardTitle>Create New Notice</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Title</label>
-                  <Input
-                    required
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Notice title"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Message</label>
-                  <textarea
-                    required
-                    value={formData.message}
-                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                    placeholder="Notice message"
-                    rows={6}
-                    className="w-full px-3 py-2 border rounded-md"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Type</label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="general">General</option>
-                      <option value="urgent">Urgent</option>
-                      <option value="maintenance">Maintenance</option>
-                      <option value="payment">Payment</option>
-                      <option value="event">Event</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Priority</label>
-                    <select
-                      value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="low">Low</option>
-                      <option value="normal">Normal</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Recipients</label>
-                  <select
-                    value={formData.recipients}
-                    onChange={(e) => setFormData({ ...formData, recipients: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md"
+      <ConfirmDialog
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title="Withdraw Notice"
+        message="Are you sure you want to take down this announcement? It will no longer be visible on tenant portals."
+        confirmText="Withdraw"
+      />
+
+      {/* Notice Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl p-10 relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Create Broadcast</h2>
+            <p className="text-gray-500 mb-8 font-medium">Send a digital notice to all residents or a specific property.</p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Notice Title</label>
+                <input 
+                  required
+                  type="text"
+                  placeholder="e.g. Scheduled Water Maintenance"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Announcement Message</label>
+                <textarea 
+                  required
+                  rows="3"
+                  placeholder="Provide detailed instructions or information..."
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Priority</label>
+                  <select 
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold appearance-none"
                   >
-                    <option value="all">All Tenants</option>
-                    <option value="property">By Property</option>
-                    <option value="specific">Specific Tenants</option>
+                    <option value="LOW">Low</option>
+                    <option value="NORMAL">Normal</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
                   </select>
                 </div>
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1">
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Notice
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1"
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Scope</label>
+                  <select 
+                    value={formData.propertyId}
+                    onChange={(e) => setFormData({ ...formData, propertyId: e.target.value })}
+                    className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold appearance-none"
                   >
-                    Cancel
-                  </Button>
+                    <option value="ALL">All Properties</option>
+                    {properties.map(p => (
+                      <option key={p.id} value={p.id}>{p.name || p.title}</option>
+                    ))}
+                  </select>
                 </div>
-              </form>
-            </CardContent>
-          </Card>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Expiry Date (Optional)</label>
+                <input 
+                  type="date"
+                  value={formData.expiresAt}
+                  onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
+                  className="w-full bg-gray-50 rounded-2xl p-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-bold"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 px-6 py-4 rounded-2xl font-bold text-gray-400 hover:bg-gray-50 transition-all text-sm uppercase tracking-widest"
+                >
+                  Discard
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-primary text-white px-6 py-4 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all text-sm uppercase tracking-widest"
+                >
+                  Publish Notice
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
-  )
-}
+  );
+};
+
+export default Notices;

@@ -11,6 +11,7 @@ import {
 } from "../middleware/centralizedErrorHandler.js";
 import logger from "../utils/logger.js";
 import { successResponse, errorResponse } from "../utils/responses.js";
+import { auditLog } from "../utils/auditLogger.js";
 
 export const leaseRouter = Router();
 
@@ -44,7 +45,7 @@ leaseRouter.get(
           "../services/streamingService.js"
         );
 
-        const where = { agencyId: req.user.agencyId };
+        const where = { agencyId: req.agencyId };
         if (active === "true") where.endDate = null;
         if (active === "false") where.endDate = { not: null };
         if (propertyId) where.propertyId = propertyId;
@@ -99,12 +100,12 @@ leaseRouter.get(
           leaseStream.pipe(csvTransform).pipe(monitoringStream),
           {
             contentType: "text/csv",
-            filename: `leases-${req.user.agencyId}-${
+            filename: `leases-${req.agencyId}-${
               new Date().toISOString().split("T")[0]
             }.csv`,
             headers: {
               "X-Stream-Type": "leases",
-              "X-Agency-Id": req.user.agencyId,
+              "X-Agency-Id": req.agencyId,
             },
           }
         );
@@ -112,7 +113,7 @@ leaseRouter.get(
       }
 
       // Build query conditions
-      const where = { agencyId: req.user.agencyId };
+      const where = { agencyId: req.agencyId };
       if (active === "true") where.endDate = null;
       if (active === "false") where.endDate = { not: null };
       if (propertyId) where.propertyId = propertyId;
@@ -174,9 +175,16 @@ leaseRouter.post(
         data: {
           propertyId,
           tenantId,
-          agencyId: req.user.agencyId,
+          agencyId: req.agencyId,
           ...rest,
         },
+      });
+
+      await auditLog(req, {
+        action: "CREATE",
+        entityType: "Lease",
+        entityId: created.id,
+        description: `New lease agreement signed for Tenant ID: ${tenantId}, Property ID: ${propertyId}`
       });
 
       return successResponse(res, created, "Lease created", 201);
@@ -239,10 +247,10 @@ leaseRouter.get(
           }
         : {};
 
-      const item = await prisma.lease.findFirst({
+      const result = await getPropertiesOptimized(req.agencyId, options);t({
         where: {
           id: req.params.id,
-          agencyId: req.user.agencyId,
+          agencyId: req.agencyId,
         },
         include,
       });
@@ -266,7 +274,7 @@ leaseRouter.put(
       const existing = await prisma.lease.findFirst({
         where: {
           id: req.params.id,
-          agencyId: req.user.agencyId,
+          agencyId: req.agencyId,
         },
       });
 
@@ -275,6 +283,13 @@ leaseRouter.put(
       const updated = await prisma.lease.update({
         where: { id: existing.id },
         data: parsed.data,
+      });
+
+      await auditLog(req, {
+        action: "UPDATE",
+        entityType: "Lease",
+        entityId: updated.id,
+        description: `Lease terms/dates updated for Lease ID: ${updated.id}`
       });
 
       return successResponse(res, updated, "Lease updated");
@@ -292,13 +307,21 @@ leaseRouter.delete(
       const existing = await prisma.lease.findFirst({
         where: {
           id: req.params.id,
-          agencyId: req.user.agencyId,
+          agencyId: req.agencyId,
         },
       });
 
       if (!existing) return res.status(404).json({ error: "Lease not found" });
 
       await prisma.lease.delete({ where: { id: existing.id } });
+
+      await auditLog(req, {
+        action: "DELETE",
+        entityType: "Lease",
+        entityId: existing.id,
+        description: `Lease agreement terminated and removed: ${existing.id}`
+      });
+
       return successResponse(res, null, "Lease deleted", 204);
     } catch (error) {
       logger.error("Error deleting lease:", error);
